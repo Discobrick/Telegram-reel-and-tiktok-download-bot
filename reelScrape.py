@@ -13,8 +13,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.firefox import GeckoDriverManager
 
 
-ublockPath = "PATH TO UNLOCK .XPI FILE"
-
 def downloadReel(downloadUrl):
     options = Options()
     options.enable_mobile
@@ -23,10 +21,10 @@ def downloadReel(downloadUrl):
     options.set_preference("browser.download.manager.showWhenStarting", False)
     options.set_preference("browser.download.dir", downloadDir)
     options.headless = True
+    options.add_argument('--no-sandbox')
     browser = webdriver.Firefox(service=Service(
         GeckoDriverManager().install()), options=options)
-    browser.install_addon(os.path.dirname(
-        ublockPath, temporary=True))
+    browser.install_addon(os.path.dirname(os.path.realpath(__file__))+'\\Ublock.xpi', temporary=True)
     browser.get("https://snapsave.app")
 
     url = browser.find_element(value="url")
