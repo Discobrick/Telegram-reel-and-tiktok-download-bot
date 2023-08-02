@@ -25,10 +25,6 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         log.error('Error for link: ' + update.message.text)
     finally:
         os.remove(getFilePath())
-    # await update.message.replt_text(downloadDir + "\Snapinsta.app_video_341990396_654510733151356_3047474843567576867_n.mp4")
-
-
-# async def download(Update)
 
 app = ApplicationBuilder().token(os.environ.get('BOT_API_KEY')).build()
 
