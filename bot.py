@@ -8,12 +8,12 @@ from telegram.ext import (ApplicationBuilder, ContextTypes, MessageHandler,
 
 from reelScrape import downloadReel
 
-downloadDir = os.path.dirname(os.path.realpath(__file__))+ "/downloads"
-
+#downloadDir = os.path.dirname(os.path.realpath(__file__))+ "/downloads"
+downloadDir = "/home/seluser/Downloads/"
 
 
 def getFilePath():
-    for filename in glob.glob(downloadDir + '/*.mp4'):
+    for filename in glob.glob(downloadDir + '*.mp4'):
         return filename
 
 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -32,4 +32,3 @@ app = ApplicationBuilder().token(os.environ.get('BOT_API_KEY')).build()
 app.add_handler(MessageHandler(filters.Regex(r"(.*www.instagram\.com\/reel.*)|(.*.tiktok.com\/)|(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)"), download))
 
 app.run_polling()
-

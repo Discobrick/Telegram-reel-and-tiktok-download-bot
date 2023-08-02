@@ -16,18 +16,19 @@ from webdriver_manager.firefox import GeckoDriverManager
 def downloadReel(downloadUrl):
     options = Options()
     options.enable_mobile
-    downloadDir = os.path.dirname(os.path.realpath(__file__)) + "\downloads"
+    #downloadDir = os.path.dirname(os.path.realpath(__file__)) + "\downloads"
+    downloadDir = "/home/seluser/Downloads/"
     options.set_preference("browser.download.folderList", 2)
     options.set_preference("browser.download.manager.showWhenStarting", False)
     options.set_preference("browser.download.dir", downloadDir)
-    options.headless = True
+    #options.headless = True
     options.add_argument('--no-sandbox')
     # browser = webdriver.Firefox(service=Service(
     #     GeckoDriverManager().install()), options=options)
     # browser.install_addon(os.path.dirname(os.path.realpath(__file__))+'\\Ublock.xpi', temporary=True)
     # browser.get("https://snapsave.app")
 
-    browser = webdriver.Remote(command_executor="localhost:4444/wd/hub",options=options)
+    browser = webdriver.Remote(command_executor="http://172.17.0.2:4444/wd/hub",options=options)
     addon_id = webdriver.Firefox.install_addon(browser,os.path.dirname(os.path.realpath(__file__))+'/Ublock.xpi', temporary=True)
     browser.get("https://snapsave.app")
 
