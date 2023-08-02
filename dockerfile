@@ -4,7 +4,7 @@ RUN sudo apt-get update
 RUN sudo apt-get upgrade -y
 RUN sudo apt-get install python3-pip -y
 RUN sudo apt-get install git -y
-ENV BOT_API=placeholder
+ENV BOT_API_KEY=placeholder
 RUN sudo mkdir /app
 RUN cd app
 WORKDIR /app
