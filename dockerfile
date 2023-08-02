@@ -13,5 +13,5 @@ WORKDIR /app/Telegram-reel-and-tiktok-download-bot
 RUN pip3 install python-telegram-bot==20.3
 RUN pip3 install selenium==4.10.0
 RUN pip3 install webdriver_manager==3.8.6
-
+RUN python3 bot.py
 
