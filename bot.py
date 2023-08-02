@@ -10,7 +10,7 @@ from reelScrape import downloadReel
 
 downloadDir = os.path.dirname(os.path.realpath(__file__))+ "\downloads"
 
-botToken = "BOT-API-TOKEN"
+
 
 def getFilePath():
     for filename in glob.glob(downloadDir + '\*.mp4'):
@@ -25,8 +25,15 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         log.error('Error for link: ' + update.message.text)
     finally:
         os.remove(getFilePath())
+    # await update.message.replt_text(downloadDir + "\Snapinsta.app_video_341990396_654510733151356_3047474843567576867_n.mp4")
 
-app = ApplicationBuilder().token(botToken).build()
-app.add_handler(MessageHandler(filters.Regex(r"(.*www.instagram\.com\/reel.*)|(.*vm.tiktok.com\/)|(.*www.facebook\.com\/reel.*)"), download))
+
+# async def download(Update)
+
+app = ApplicationBuilder().token("1062079628:AAEq1Bgpx_7d-gWK8BjsOsUDjzR5iuMeuxU").build()
+
+
+app.add_handler(MessageHandler(filters.Regex(r"(.*www.instagram\.com\/reel.*)|(.*.tiktok.com\/)|(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)"), download))
+
 app.run_polling()
 

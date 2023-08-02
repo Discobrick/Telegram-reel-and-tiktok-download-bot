@@ -27,13 +27,18 @@ def downloadReel(downloadUrl):
     browser.install_addon(os.path.dirname(os.path.realpath(__file__))+'\\Ublock.xpi', temporary=True)
     browser.get("https://snapsave.app")
 
+    browser = webdriver.Remote(command_executor="localhost:4444/wd/hub",options=options)
+    browser.install_addon(os.path.dirname(os.path.realpath(__file__))+'\\Ublock.xpi', temporary=True)
+    browser.get("https://snapsave.app")
+
+
     url = browser.find_element(value="url")
     url.send_keys(downloadUrl)
     url.send_keys(Keys.RETURN)
 
     time.sleep(5)
 
-    if (re.search(r".*www.facebook\.com\/reel.*", downloadUrl)):
+    if (re.search(r"(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)", downloadUrl)):
         # Removes giant ad div that remains empty and pushes download button out of view
         browser.execute_script(
             "document.getElementById(\"ad-slot\").remove();")
