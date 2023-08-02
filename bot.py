@@ -8,12 +8,12 @@ from telegram.ext import (ApplicationBuilder, ContextTypes, MessageHandler,
 
 from reelScrape import downloadReel
 
-downloadDir = os.path.dirname(os.path.realpath(__file__))+ "\downloads"
+downloadDir = os.path.dirname(os.path.realpath(__file__))+ "/downloads"
 
 
 
 def getFilePath():
-    for filename in glob.glob(downloadDir + '\*.mp4'):
+    for filename in glob.glob(downloadDir + '/*.mp4'):
         return filename
 
 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

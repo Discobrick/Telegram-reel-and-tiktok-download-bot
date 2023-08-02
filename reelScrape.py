@@ -28,7 +28,7 @@ def downloadReel(downloadUrl):
     # browser.get("https://snapsave.app")
 
     browser = webdriver.Remote(command_executor="localhost:4444/wd/hub",options=options)
-    browser.install_addon(os.path.dirname(os.path.realpath(__file__))+'\\Ublock.xpi', temporary=True)
+    addon_id = webdriver.Firefox.install_addon(browser,os.path.dirname(os.path.realpath(__file__))+'/Ublock.xpi', temporary=True)
     browser.get("https://snapsave.app")
 
 
@@ -61,6 +61,6 @@ def downloadReel(downloadUrl):
             (By.XPATH, "//*[@title = 'Download Photo'] | //*[@title = 'Download Video']"))).click()
 
     # Prevent Firefox from closing if the download is taking too long.
-    while (glob.glob(downloadDir + '\*.part')):
+    while (glob.glob(downloadDir + '/*.part')):
         time.sleep(1)
     browser.quit()
