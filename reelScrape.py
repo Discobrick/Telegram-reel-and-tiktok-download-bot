@@ -22,10 +22,10 @@ def downloadReel(downloadUrl):
     options.set_preference("browser.download.dir", downloadDir)
     options.headless = True
     options.add_argument('--no-sandbox')
-    browser = webdriver.Firefox(service=Service(
-        GeckoDriverManager().install()), options=options)
-    browser.install_addon(os.path.dirname(os.path.realpath(__file__))+'\\Ublock.xpi', temporary=True)
-    browser.get("https://snapsave.app")
+    # browser = webdriver.Firefox(service=Service(
+    #     GeckoDriverManager().install()), options=options)
+    # browser.install_addon(os.path.dirname(os.path.realpath(__file__))+'\\Ublock.xpi', temporary=True)
+    # browser.get("https://snapsave.app")
 
     browser = webdriver.Remote(command_executor="localhost:4444/wd/hub",options=options)
     browser.install_addon(os.path.dirname(os.path.realpath(__file__))+'\\Ublock.xpi', temporary=True)
