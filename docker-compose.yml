@@ -22,6 +22,11 @@ services:
       - authors="Discobrick"
       - org.opencontainers.image.ref.name=ubuntu
       - org.opencontainers.image.version=20.04
-    command: python3 bot.py &
+    command: "/usr/bin/python3 bot.py &"
+    healthcheck:
+      test: curl --fail -s http://127.0.0.1:4444/ || exit 1
+      interval: 1m
+      timeout: 10s
+      retries: 3
     runtime: runc
 
