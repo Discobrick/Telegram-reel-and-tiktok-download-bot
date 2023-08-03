@@ -2,9 +2,6 @@ FROM selenium/standalone-firefox:4.11.0-20230801
 
 WORKDIR /app
 
-
-RUN sudo apt-get update
-RUN sudo apt-get upgrade -y
 RUN sudo apt-get install python3-pip -y
 
 RUN mkdir downloads
