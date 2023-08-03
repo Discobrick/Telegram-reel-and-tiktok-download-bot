@@ -5,7 +5,7 @@ WORKDIR /app
 RUN sudo apt-get update
 RUN sudo apt-get install python3-pip -y
 
-RUN mkdir downloads
+RUN sudo mkdir downloads
 COPY bot.py .
 COPY reelScrape.py .
 COPY Ublock.xpi .
