@@ -4,7 +4,7 @@ services:
   botty_mcbotface:
     build:
       context: .
-      dockerfile: ./Dockerfile
+      dockerfile: dockerfile
       args:
         - VERSION=latest
     image: botimage:latest
@@ -19,7 +19,9 @@ services:
       - '7900:7900'
     restart: unless-stopped
     labels:
-      - authors=
+      - authors="Discobrick"
       - org.opencontainers.image.ref.name=ubuntu
       - org.opencontainers.image.version=20.04
+    command: python3 bot.py &
     runtime: runc
+
