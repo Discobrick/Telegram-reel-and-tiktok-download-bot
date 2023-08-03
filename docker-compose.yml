@@ -2,6 +2,11 @@ version: '3'
 
 services:
   botty_mcbotface:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        - VERSION=latest
     image: botimage:latest
     container_name: botty_mcbotface
     hostname: 16ad92754358
