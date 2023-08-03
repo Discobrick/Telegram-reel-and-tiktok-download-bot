@@ -1,0 +1,25 @@
+version: '3'
+
+services:
+  botty_mcbotface:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        - VERSION=latest
+    image: botimage:latest
+    container_name: botty_mcbotface
+    hostname: 16ad92754358
+    user: '1200'
+    env_file:
+      - .env
+    working_dir: /app
+    ports:
+      - '4444:4444'
+      - '7900:7900'
+    restart: unless-stopped
+    labels:
+      - authors=
+      - org.opencontainers.image.ref.name=ubuntu
+      - org.opencontainers.image.version=20.04
+    runtime: runc
