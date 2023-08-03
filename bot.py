@@ -8,7 +8,6 @@ from telegram.ext import (ApplicationBuilder, ContextTypes, MessageHandler,
 
 from reelScrape import downloadReel
 
-#downloadDir = os.path.dirname(os.path.realpath(__file__))+ "/downloads"
 downloadDir = "/home/seluser/Downloads/"
 
 
