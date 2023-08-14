@@ -10,6 +10,11 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+def enterUrl(downloadUrl, browser):
+    url = browser.find_element(value="url")
+    url.send_keys(downloadUrl)
+    url.send_keys(Keys.RETURN)
+
 
 def downloadReel(downloadUrl):
     options = Options()
@@ -25,9 +30,11 @@ def downloadReel(downloadUrl):
     browser.get("https://snapsave.app")
 
 
-    url = browser.find_element(value="url")
-    url.send_keys(downloadUrl)
-    url.send_keys(Keys.RETURN)
+    enterUrl(downloadUrl, browser)
+
+    if(browser.find_element(By.ID,"alert")):
+        enterUrl(downloadUrl, browser)
+
 
     time.sleep(5)
 
@@ -57,3 +64,4 @@ def downloadReel(downloadUrl):
     while (glob.glob(downloadDir + '/*.part')):
         time.sleep(1)
     browser.quit()
+
