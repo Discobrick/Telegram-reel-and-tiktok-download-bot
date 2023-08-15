@@ -2,6 +2,7 @@ import glob
 import os
 import re
 import time
+import urllib.request
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -14,6 +15,7 @@ def enterUrl(downloadUrl, browser):
     url = browser.find_element(value="url")
     url.send_keys(downloadUrl)
     url.send_keys(Keys.RETURN)
+
 
 
 def downloadReel(downloadUrl):
@@ -31,8 +33,8 @@ def downloadReel(downloadUrl):
 
 
     enterUrl(downloadUrl, browser)
-
-    if(browser.find_element(By.ID,"alert")):
+    time.sleep(2)
+    if(browser.find_element(By.XPATH,"//*[@class='notification is-warning']")):
         enterUrl(downloadUrl, browser)
 
 
@@ -45,7 +47,11 @@ def downloadReel(downloadUrl):
         time.sleep(1)
         WebDriverWait(browser, 1000000).until(EC.element_to_be_clickable(
             (By.XPATH, "//*[@class = 'table is-fullwidth']/tbody/tr[1]/td[3]/a"))).click()
-
+    
+    elif(re.search(r".*9gag\.com\/gag\/.*",downloadUrl)):
+        videoUrl = browser.find_element(By.XPATH,"//*[@type=\"video/mp4\"]/@src")
+        urllib.request.urlretrieve(videoUrl,'/home/seluser/Downloads/' + downloadUrl +'.mp4')
+        time.sleep(5)
     else:
         # Removes giant ad div that remains empty and pushes download button out of view
         browser.execute_script(
