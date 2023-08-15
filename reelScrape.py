@@ -29,7 +29,10 @@ def downloadReel(downloadUrl):
 
     browser = webdriver.Remote(command_executor="http://127.0.0.1:4444/wd/hub",options=options)
     addon_id = webdriver.Firefox.install_addon(browser,os.path.dirname(os.path.realpath(__file__))+'/Ublock.xpi', temporary=True)
-    browser.get("https://snapsave.app")
+    if(re.search(r".*9gag\.com\/gag\/.*",downloadUrl)):
+       browser.get(downloadUrl)
+    else:
+        browser.get("https://snapsave.app")
 
 
     enterUrl(downloadUrl, browser)
