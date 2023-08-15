@@ -30,14 +30,17 @@ def downloadReel(downloadUrl):
     browser = webdriver.Remote(command_executor="http://127.0.0.1:4444/wd/hub",options=options)
     addon_id = webdriver.Firefox.install_addon(browser,os.path.dirname(os.path.realpath(__file__))+'/Ublock.xpi', temporary=True)
     if(re.search(r".*9gag\.com\/gag\/.*",downloadUrl)):
-        browser.get(downloadUrl)
+       browser.get(downloadUrl)
+    else:
+        browser.get("https://snapsave.app")
         enterUrl(downloadUrl, browser)
         time.sleep(2)
         if(browser.find_element(By.XPATH,"//*[@class='notification is-warning']")):
             enterUrl(downloadUrl, browser)
-        time.sleep(5)
-    else:
-        browser.get("https://snapsave.app")
+    time.sleep(5)
+
+
+
 
     if (re.search(r"(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)", downloadUrl)):
         # Removes giant ad div that remains empty and pushes download button out of view
