@@ -9,8 +9,8 @@ from telegram.ext import (ApplicationBuilder, ContextTypes, MessageHandler,
 from reelScrape import downloadReel
 
 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    filePath = downloadReel(update.message.text,update.effective_user.username)
     try:
+        filePath = downloadReel(update.message.text,update.effective_user.username)
         await update.message.reply_video(filePath,caption='From @'+update.effective_user.username,quote=False,disable_notification=True,read_timeout=180,write_timeout=180,connect_timeout=180,pool_timeout=180)
         await update.effective_message.delete()
     except Exception:
