@@ -15,5 +15,5 @@ Since the image that I'm using is for Selenium Grid with Firefox the docker run 
 Next run the following command to run the bot.py inside the container
 
 ```
-docker compose exec botty_mcbotface python3 bot.py -d
+docker compose exec -d botty_mcbotface python3 bot.py
 ```
