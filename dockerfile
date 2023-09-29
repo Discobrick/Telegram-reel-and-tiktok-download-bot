@@ -8,6 +8,7 @@ RUN sudo apt-get install python3-pip -y
 RUN sudo apt-get install screen -y
 
 RUN sudo mkdir downloads
+RUN sudo chown seluser:seluser downloads
 COPY bot.py .
 COPY reelScrape.py .
 COPY Ublock.xpi .

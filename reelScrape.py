@@ -1,8 +1,7 @@
-import glob
 import os
 import re
-import time
-import urllib.request
+import requests
+from datetime import datetime
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -11,65 +10,40 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-def enterUrl(downloadUrl, browser):
+def goToSnapSave(downloadUrl, browser):
+    browser.get("https://snapsave.app")
     url = browser.find_element(value="url")
     url.send_keys(downloadUrl)
     url.send_keys(Keys.RETURN)
 
 
-
-def downloadReel(downloadUrl):
+def downloadReel(downloadUrl,fromUser):
     options = Options()
     options.enable_mobile
-    downloadDir = "/home/seluser/Downloads/"
-    options.set_preference("browser.download.folderList", 2)
-    options.set_preference("browser.download.manager.showWhenStarting", False)
-    options.set_preference("browser.download.dir", downloadDir)
     options.add_argument('--no-sandbox')
 
     browser = webdriver.Remote(command_executor="http://127.0.0.1:4444/wd/hub",options=options)
     addon_id = webdriver.Firefox.install_addon(browser,os.path.dirname(os.path.realpath(__file__))+'/Ublock.xpi', temporary=True)
-    if(re.search(r".*9gag\.com\/gag\/.*",downloadUrl)):
-       browser.get(downloadUrl)
-    else:
-        browser.get("https://snapsave.app")
-        enterUrl(downloadUrl, browser)
-        time.sleep(2)
-        if(browser.find_element(By.XPATH,"//*[@class='notification is-warning']")):
-            enterUrl(downloadUrl, browser)
-    time.sleep(5)
-
-
-
+    videoUrl = ""
 
     if (re.search(r"(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)", downloadUrl)):
-        # Removes giant ad div that remains empty and pushes download button out of view
-        browser.execute_script(
-            "document.getElementById(\"ad-slot\").remove();")
-        time.sleep(1)
-        WebDriverWait(browser, 1000000).until(EC.element_to_be_clickable(
-            (By.XPATH, "//*[@class = 'table is-fullwidth']/tbody/tr[1]/td[3]/a"))).click()
-    
+        goToSnapSave(downloadUrl, browser)
+        WebDriverWait(browser,10).until(EC.presence_of_element_located((By.XPATH,"(//*[contains(@href,'https://video')])[1]")))
+        videoUrl = browser.find_element(By.XPATH,"(//*[contains(@href,'https://video')])[1]").get_attribute('href')
     elif(re.search(r".*9gag\.com\/gag\/.*",downloadUrl)):
-        videoUrl = browser.find_element(By.XPATH,"//*[@type=\"video/mp4\"]/@src")
-        urllib.request.urlretrieve(videoUrl,'/home/seluser/Downloads/' + downloadUrl +'.mp4')
-        time.sleep(5)
+        browser.get(downloadUrl)
+        WebDriverWait(browser,10).until(EC.presence_of_element_located((By.XPATH,"//*[@type='video/mp4']")))
+        videoUrl = browser.find_element(By.XPATH,"//*[@type='video/mp4']").get_attribute('src')
     else:
-        # Removes giant ad div that remains empty and pushes download button out of view
-        browser.execute_script(
-            "document.getElementById(\"ad-slot\").remove();")
-        try:
-         # Changes the element height so that it is rendered into view   
-            browser.execute_script(
-                "document.getElementsByClassName(\"download-items__thumb video\")[0].style.height = \"100px\"")
-        except Exception:
-            pass
-        time.sleep(1)
-        WebDriverWait(browser, 1000000).until(EC.element_to_be_clickable(
-            (By.XPATH, "//*[@title = 'Download Photo'] | //*[@title = 'Download Video']"))).click()
+        goToSnapSave(downloadUrl, browser)
+        WebDriverWait(browser,10).until(EC.presence_of_element_located((By.XPATH,"//*[contains(@href,'https://snapxcdn.com')]")))
+        videoUrl = browser.find_element(By.XPATH,"//*[contains(@href,'https://snapxcdn.com')]").get_attribute('href')
 
-    # Prevent Firefox from closing if the download is taking too long.
-    while (glob.glob(downloadDir + '/*.part')):
-        time.sleep(1)
+
+    r = requests.get(videoUrl)
+    filePath = '/app/downloads' + fromUser + datetime.now().strftime("%d%m%Y%H%M%S") +  '.mp4'
+    open(filePath,'wb').write(r.content)
+
     browser.quit()
+    return filePath
 
