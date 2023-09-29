@@ -28,15 +28,15 @@ def downloadReel(downloadUrl,fromUser):
     try:
         if (re.search(r"(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)", downloadUrl)):
             goToSnapSave(downloadUrl, browser)
-            WebDriverWait(browser,20).until(EC.presence_of_element_located((By.XPATH,"(//*[contains(@href,'https://video')])[1]")))
+            WebDriverWait(browser,60).until(EC.presence_of_element_located((By.XPATH,"(//*[contains(@href,'https://video')])[1]")))
             videoUrl = browser.find_element(By.XPATH,"(//*[contains(@href,'https://video')])[1]").get_attribute('href')
         elif(re.search(r".*9gag\.com\/gag\/.*",downloadUrl)):
             browser.get(downloadUrl)
-            WebDriverWait(browser,20).until(EC.presence_of_element_located((By.XPATH,"//*[@type='video/mp4']")))
+            WebDriverWait(browser,60).until(EC.presence_of_element_located((By.XPATH,"//*[@type='video/mp4']")))
             videoUrl = browser.find_element(By.XPATH,"//*[@type='video/mp4']").get_attribute('src')
         else:
             goToSnapSave(downloadUrl, browser)
-            WebDriverWait(browser,20).until(EC.presence_of_element_located((By.XPATH,"//*[contains(@href,'https://snapxcdn.com')]")))
+            WebDriverWait(browser,60).until(EC.presence_of_element_located((By.XPATH,"//*[contains(@href,'https://snapxcdn.com')]")))
             videoUrl = browser.find_element(By.XPATH,"//*[contains(@href,'https://snapxcdn.com')]").get_attribute('href')
     except:
         browser.quit()
