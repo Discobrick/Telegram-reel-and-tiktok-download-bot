@@ -14,6 +14,7 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_video(filePath,caption='From @'+update.effective_user.username,quote=False,disable_notification=True,read_timeout=180,write_timeout=180,connect_timeout=180,pool_timeout=180)
         await update.effective_message.delete()
     except Exception:
+        await update.message.reply_text(text="Can't download this",quote=True)
         log.error('Error for link: ' + update.message.text)
     finally:
         os.remove(filePath)
