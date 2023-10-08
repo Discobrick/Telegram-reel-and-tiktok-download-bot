@@ -1,30 +1,49 @@
-import glob
 import logging as log
 import os
 
 from telegram import Update
-from telegram.ext import (ApplicationBuilder, ContextTypes, MessageHandler,
-                          filters)
+from telegram.ext import (ApplicationBuilder, MessageHandler,filters)
 
-from reelScrape import downloadReel
-donateAt = 0
-async def download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+from reel_scrape import download_reel
+
+global meme_bot_init,meme_bot_topic
+
+meme_bot_init = False
+meme_bot_topic = ""
+
+async def download(update: Update,context) -> None:
+    """Gets video url from a telegram message, downloads the video, and sends a message with it."""
     try:
-        filePath = downloadReel(update.message.text,update.effective_user.username)
-        await update.message.reply_video(filePath,caption='From @'+update.effective_user.username,quote=False,disable_notification=True,read_timeout=180,write_timeout=180,connect_timeout=180,pool_timeout=180)
+        filePath = download_reel(update.message.text,update.effective_user.username)
+        if meme_bot_init == True and update.effective_chat.is_forum:
+            await update.message.reply_video(filePath,caption='From @'+update.effective_user.username,quote=False,disable_notification=True,read_timeout=180,write_timeout=180,connect_timeout=180,pool_timeout=180,message_thread_id=meme_bot_topic)
+        else:
+            await update.message.reply_video(filePath,caption='From @'+update.effective_user.username,quote=False,disable_notification=True,read_timeout=180,write_timeout=180,connect_timeout=180,pool_timeout=180)
         await update.effective_message.delete()
         os.remove(filePath)
-        donateAt += 1
-        if donateAt % 100 == 0:
-            await update.message.reply_text(text="Buy me a coffee: https://ko-fi.com/dioksy")
-    except Exception:
+    except Exception as e:
         await update.message.reply_text(text="Can't download",quote=True)
         log.error('Error for link: ' + update.message.text)  
+        log.error(e)
+
+async def initMemeTopic(update: Update, context) -> None:
+    global meme_bot_init,meme_bot_topic
+    if meme_bot_init is False:
+        meme_bot_topic = str(update.effective_message.reply_to_message.message_thread_id)
+        meme_bot_init = True
+
+async def resetMemeTopic(update: Update, context) -> None:
+    global meme_bot_init,meme_bot_topic
+    if meme_bot_topic == str(update.effective_message.reply_to_message.message_thread_id):
+        meme_bot_init = False
+        meme_bot_topic = ""
+
 
 app = ApplicationBuilder().token(os.environ.get('BOT_API_KEY')).build()
 
 
 app.add_handler(MessageHandler(filters.Regex(r"(.*www.instagram\.com\/reel.*)|(.*.tiktok.com\/)|(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)|(.*9gag\.com\/gag\/.*)"), download))
-
+app.add_handler(MessageHandler(filters.Regex(r"initCurrentTopicAsMemeBotTopic"),initMemeTopic))
+app.add_handler(MessageHandler(filters.Regex(r"resetMemeTopic"),resetMemeTopic))
 
 app.run_polling()

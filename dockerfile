@@ -10,7 +10,7 @@ RUN sudo apt-get install screen -y
 RUN sudo mkdir downloads
 RUN sudo chown seluser:seluser downloads
 COPY bot.py .
-COPY reelScrape.py .
+COPY reel_scrape.py .
 COPY Ublock.xpi .
 
 RUN pip3 install python-telegram-bot==20.3
