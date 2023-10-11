@@ -37,25 +37,30 @@ def download_reel(download_url,from_user):
     return file_path
 
 def get_video_url(download_url, browser):
-    try:
-        if (re.search(r"(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)", download_url)):
-            go_to_snap_save(download_url, browser)
-            FB_VIDEO_XPATH = "(//*[contains(@onClick,'showAd')])[1]"
-            WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,FB_VIDEO_XPATH)))
-            video_url = browser.find_element(By.XPATH,FB_VIDEO_XPATH).get_attribute('href')
-        elif(re.search(r".*9gag\.com\/gag\/.*",download_url)):
-            browser.get(download_url)
-            NEINGAG_VIDEO_XPATH = "//*[@type='video/mp4']"
-            WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,NEINGAG_VIDEO_XPATH)))
-            video_url = browser.find_element(By.XPATH,NEINGAG_VIDEO_XPATH).get_attribute('src')
+    for i in range(4):
+        try:
+            if (re.search(r"(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)", download_url)):
+                go_to_snap_save(download_url, browser)
+                FB_VIDEO_XPATH = "(//*[contains(@onClick,'showAd')])[1]"
+                WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,FB_VIDEO_XPATH)))
+                video_url = browser.find_element(By.XPATH,FB_VIDEO_XPATH).get_attribute('href')
+            elif(re.search(r".*9gag\.com\/gag\/.*",download_url)):
+                browser.get(download_url)
+                NEINGAG_VIDEO_XPATH = "//*[@type='video/mp4']"
+                WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,NEINGAG_VIDEO_XPATH)))
+                video_url = browser.find_element(By.XPATH,NEINGAG_VIDEO_XPATH).get_attribute('src')
+            else:
+                go_to_snap_save(download_url, browser)
+                TIKTOK_INSTA_VIDEO_XPATH = "//*[contains(@onClick,'showAd')]"
+                WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,TIKTOK_INSTA_VIDEO_XPATH)))
+                video_url = browser.find_element(By.XPATH,TIKTOK_INSTA_VIDEO_XPATH).get_attribute('href')
+        except Exception as e:
+            if i < 4 - 1:
+                continue
+            else:
+                log.error(e)
+                browser.quit()
+                raise
         else:
-            go_to_snap_save(download_url, browser)
-            TIKTOK_INSTA_VIDEO_XPATH = "//*[contains(@onClick,'showAd')]"
-            WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,TIKTOK_INSTA_VIDEO_XPATH)))
-            video_url = browser.find_element(By.XPATH,TIKTOK_INSTA_VIDEO_XPATH).get_attribute('href')
-    except Exception as e:
-        log.error(e)
-        browser.quit()
-
+            break
     return video_url
-
