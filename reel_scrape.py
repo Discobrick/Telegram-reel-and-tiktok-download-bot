@@ -3,6 +3,7 @@ import re
 import requests
 from datetime import datetime
 import logging as log
+import time
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -37,7 +38,8 @@ def download_reel(download_url,from_user):
     return file_path
 
 def get_video_url(download_url, browser):
-    for i in range(4):
+    for i in range(10):
+        time.sleep(i)
         try:
             if (re.search(r"(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)", download_url)):
                 go_to_snap_save(download_url, browser)
@@ -55,7 +57,7 @@ def get_video_url(download_url, browser):
                 WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,TIKTOK_INSTA_VIDEO_XPATH)))
                 video_url = browser.find_element(By.XPATH,TIKTOK_INSTA_VIDEO_XPATH).get_attribute('href')
         except Exception as e:
-            if i < 4 - 1:
+            if i < 10 - 1:
                 continue
             else:
                 log.error(e)
