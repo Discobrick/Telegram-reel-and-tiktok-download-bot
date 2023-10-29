@@ -31,12 +31,14 @@ async def initMemeTopic(update: Update, context) -> None:
     if meme_bot_init is False:
         meme_bot_topic = str(update.effective_message.reply_to_message.message_thread_id)
         meme_bot_init = True
+        await update.effective_message.delete()
 
 async def resetMemeTopic(update: Update, context) -> None:
     global meme_bot_init,meme_bot_topic
     if meme_bot_topic == str(update.effective_message.reply_to_message.message_thread_id):
         meme_bot_init = False
         meme_bot_topic = ""
+        await update.effective_message.delete()
 
 
 app = ApplicationBuilder().token(os.environ.get('BOT_API_KEY')).build()

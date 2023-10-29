@@ -1,9 +1,9 @@
 import os
 import re
-import requests
-from datetime import datetime
-import logging as log
 import time
+import logging as log
+from datetime import datetime
+import requests
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -41,12 +41,12 @@ def get_video_url(download_url, browser):
     for i in range(10):
         time.sleep(i)
         try:
-            if (re.search(r"(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)", download_url)):
+            if re.search(r"(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)", download_url):
                 go_to_snap_save(download_url, browser)
                 FB_VIDEO_XPATH = "(//*[contains(@onClick,'showAd')])[1]"
                 WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,FB_VIDEO_XPATH)))
                 video_url = browser.find_element(By.XPATH,FB_VIDEO_XPATH).get_attribute('href')
-            elif(re.search(r".*9gag\.com\/gag\/.*",download_url)):
+            elif re.search(r".*9gag\.com\/gag\/.*",download_url):
                 browser.get(download_url)
                 NEINGAG_VIDEO_XPATH = "//*[@type='video/mp4']"
                 WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,NEINGAG_VIDEO_XPATH)))
