@@ -41,7 +41,7 @@ def get_video_url(download_url, browser):
     for i in range(10):
         time.sleep(i)
         try:
-            if re.search(r"(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)", download_url):
+            if re.search(r"(.*www\.facebook\.com\/reel.*)|(.*fb\.watch\/.*)|(.*www\.facebook\.com\/share.*)", download_url):
                 go_to_snap_save(download_url, browser)
                 FB_VIDEO_XPATH = "(//*[contains(@onClick,'showAd')])[1]"
                 WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,FB_VIDEO_XPATH)))

@@ -44,7 +44,7 @@ async def resetMemeTopic(update: Update, context) -> None:
 app = ApplicationBuilder().token(os.environ.get('BOT_API_KEY')).build()
 
 
-app.add_handler(MessageHandler(filters.Regex(r"(.*www.instagram\.com\/reel.*)|(.*.tiktok.com\/)|(.*www.facebook\.com\/reel.*)|(.*fb.watch\/.*)|(.*9gag\.com\/gag\/.*)"), download))
+app.add_handler(MessageHandler(filters.Regex(r"(.*www.instagram\.com\/reel.*)|(.*.tiktok.com\/)|(.*www\.facebook\.com\/reel.*)|(.*fb\.watch\/.*)|(.*www\.facebook\.com\/share.*)|(.*9gag\.com\/gag\/.*)"), download))
 app.add_handler(MessageHandler(filters.Regex(r"initCurrentTopicAsMemeBotTopic"),initMemeTopic))
 app.add_handler(MessageHandler(filters.Regex(r"resetMemeTopic"),resetMemeTopic))
 
