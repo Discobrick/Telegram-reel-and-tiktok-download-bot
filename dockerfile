@@ -13,6 +13,6 @@ COPY bot.py .
 COPY reel_scrape.py .
 COPY Ublock.xpi .
 
-RUN pip3 install python-telegram-bot==20.3
+RUN pip3 install python-telegram-bot==20.8
 RUN pip3 install selenium==4.10.0
 RUN pip3 install webdriver_manager==3.8.6
