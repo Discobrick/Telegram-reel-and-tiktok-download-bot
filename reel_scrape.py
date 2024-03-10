@@ -5,76 +5,45 @@ import logging as log
 from datetime import datetime
 import requests
 
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.firefox.options import Options
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+def get_video_link_rapid_api(download_url):
+    url = "https://social-media-video-downloader.p.rapidapi.com/smvd/get/all"
 
-def go_to_snap_save_app(download_url, browser):
-    """Navigates to snapsave.app"""
-    browser.get("https://snapsave.app")
-    url = browser.find_element(value="url")
-    url.send_keys(download_url)
-    url.send_keys(Keys.RETURN)
+    querystring = {
+        "url": download_url, "filename": "YTvideo"}
+
+    headers = {
+        "X-RapidAPI-Key": os.environ.get('RAPID_API_KEY'),
+        "X-RapidAPI-Host": "social-media-video-downloader.p.rapidapi.com"
+    }
+
+    response = requests.get(url, headers=headers, params=querystring)
+    print(response.json())
+    for item in response.json()['links']:
+        if item['quality'] == 'sd_360p' or item['quality'] == 'hd' or item['quality'] == 'original':
+            print(item)
+            return item['link']
 
 
-def go_to_snap_save_io(download_url, browser):
-    """Navigates to snapsave.io"""
-    browser.get("https://snapsave.io/")
-    url = browser.find_element(By.XPATH,"//*[contains(@class,'search__input')]")
-    url.send_keys(download_url)
-    url.send_keys(Keys.RETURN)
 
-def download_reel(download_url,from_user):
-    """Downloads a video from one of the supported sites"""
-    options = Options()
-    options.enable_mobile
-    options.add_argument('--no-sandbox')
-
-    browser = webdriver.Remote(command_executor="http://127.0.0.1:4444/wd/hub",options=options)
-    addon_id = webdriver.Firefox.install_addon(browser,os.path.dirname(os.path.realpath(__file__))+'/Ublock.xpi', temporary=True)
-    video_url = get_video_url(download_url, browser)
-    r = requests.get(video_url,timeout=300,allow_redirects=True)
-    file_path = '/app/downloads' + from_user + datetime.now().strftime("%d%m%Y%H%M%S") +  '.mp4'
-    open(file_path,'wb').write(r.content)
-
-    browser.quit()
+def download_reel(download_url, from_user):
+    video_url = get_video_url(download_url)
+    r = requests.get(video_url, timeout=300, allow_redirects=True)
+    file_path = '/app/' + from_user + \
+        datetime.now().strftime("%d%m%Y%H%M%S") + '.mp4'
+    open(file_path, 'wb').write(r.content)
     return file_path
+ 
 
-def get_video_url(download_url, browser):
+def get_video_url(download_url):
     for i in range(10):
         time.sleep(i)
         try:
-            if re.search(r"(.*www\.facebook\.com\/reel.*)|(.*fb\.watch\/.*)|(.*www\.facebook\.com\/share.*)", download_url):
-                go_to_snap_save_app(download_url, browser)
-                FB_VIDEO_XPATH = "(//*[contains(@onClick,'showAd')])[1]"
-                WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,FB_VIDEO_XPATH)))
-                video_url = browser.find_element(By.XPATH,FB_VIDEO_XPATH).get_attribute('href')
-            elif re.search(r".*9gag\.com\/gag\/.*",download_url):
-                browser.get(download_url)
-                NEINGAG_VIDEO_XPATH = "//*[@type='video/mp4']"
-                WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,NEINGAG_VIDEO_XPATH)))
-                video_url = browser.find_element(By.XPATH,NEINGAG_VIDEO_XPATH).get_attribute('src')
-            elif re.search(r"(.*(www\.|)youtube\.com\/shorts\/.*)", download_url):
-                go_to_snap_save_io(download_url, browser)
-                GET_VIDEO_LINK = "//*[contains(@onClick,'convertFile(0)')]"
-                DOWNLOAD_VIDEO_LINK = "//*[text()[contains(.,'Download')] and contains(@id,'asuccess') and contains(@rel,'nofollow') and contains(@href,'https://')]"
-                WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,GET_VIDEO_LINK))).click()
-                time.sleep(2)
-                video_url = browser.find_element(By.XPATH,DOWNLOAD_VIDEO_LINK).get_attribute('href')
-            else:
-                go_to_snap_save_app(download_url, browser)
-                TIKTOK_INSTA_VIDEO_XPATH = "//*[contains(@onClick,'showAd')]"
-                WebDriverWait(browser,120).until(EC.presence_of_element_located((By.XPATH,TIKTOK_INSTA_VIDEO_XPATH)))
-                video_url = browser.find_element(By.XPATH,TIKTOK_INSTA_VIDEO_XPATH).get_attribute('href')
+            video_url = get_video_link_rapid_api(download_url)
         except Exception as e:
             if i < 10 - 1:
                 continue
             else:
                 log.error(e)
-                browser.quit()
                 raise
         else:
             break
