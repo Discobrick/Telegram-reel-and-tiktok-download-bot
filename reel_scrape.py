@@ -1,5 +1,4 @@
 import os
-import re
 import time
 import logging as log
 from datetime import datetime
@@ -7,20 +6,18 @@ import requests
 
 def get_video_link_rapid_api(download_url):
     url = "https://social-media-video-downloader.p.rapidapi.com/smvd/get/all"
-
     querystring = {
-        "url": download_url, "filename": "YTvideo"}
+        "url": download_url, "filename": "video"}
 
     headers = {
         "X-RapidAPI-Key": os.environ.get('RAPID_API_KEY'),
         "X-RapidAPI-Host": "social-media-video-downloader.p.rapidapi.com"
     }
 
+    link_identifiers = os.environ.get('RAPID_API_LINK_IDENTIFIED').split(";")
     response = requests.get(url, headers=headers, params=querystring)
-    print(response.json())
     for item in response.json()['links']:
-        if item['quality'] == 'sd_360p' or item['quality'] == 'hd' or item['quality'] == 'original':
-            print(item)
+        if item['quality'] in link_identifiers:
             return item['link']
 
 

@@ -9,7 +9,7 @@ services:
         - VERSION=latest
     image: python:3.12-slim
     container_name: botty_mcbotface
-    user: '1200'
+    user: 1200:1200
     env_file:
       - .env
     working_dir: /app
@@ -18,6 +18,6 @@ services:
       - authors="Discobrick"
       - org.opencontainers.image.ref.name=ubuntu
       - org.opencontainers.image.version=20.04
-    command: "/usr/bin/python3 bot.py &"
+    # command: "/usr/bin/python3 bot.py &"
     runtime: runc
 
