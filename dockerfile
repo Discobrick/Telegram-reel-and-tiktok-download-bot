@@ -5,10 +5,15 @@ WORKDIR /app
 RUN chown 1200:1200 /app
 
 COPY bot.py .
-COPY reel_scrape.py .
+COPY scraper.py .
+
+RUN apt-get update \
+  && apt-get install -y ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install requests
 RUN pip3 install python-telegram-bot==20.8
+RUN pip install yt-dlp
 
 ENTRYPOINT [ "python3" ]
 

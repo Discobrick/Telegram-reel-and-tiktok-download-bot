@@ -5,7 +5,8 @@ from telegram import Update
 from telegram import ReactionType,ReactionTypeEmoji
 from telegram.ext import (ApplicationBuilder, MessageHandler,filters)
 
-from reel_scrape import download_reel
+
+from scraper import download_reel
 
 global meme_bot_init,meme_bot_topic
 
@@ -28,6 +29,7 @@ async def download(update: Update,context) -> None:
         os.remove(filePath)
     except Exception:
         await update.message.set_reaction(reaction=ReactionTypeEmoji("👎"))
+        
         log.error('Error for link: ' + update.message.text)  
         log.error(traceback.format_exc())
 
@@ -37,6 +39,9 @@ def from_user(update):
     else:
         from_user = 'From ' + update.effective_user.first_name
     return from_user
+
+async def cleanup(update: Update, context) -> None:
+    print(update.chat)
 
 async def initMemeTopic(update: Update, context) -> None:
     global meme_bot_init,meme_bot_topic
@@ -58,7 +63,7 @@ async def testFunc(update: Update, context) -> None:
 app = ApplicationBuilder().token(os.environ.get('BOT_API_KEY')).build()
 
 
-app.add_handler(MessageHandler(filters.Regex(r"(.*www.instagram\.com\/reel.*)|(.*.tiktok.com\/)|(.*www\.facebook\.com\/reel.*)|(.*fb\.watch\/.*)|(.*www\.facebook\.com\/share.*)|(.*(www\.|)youtube\.com\/shorts\/.*)"), download))
+app.add_handler(MessageHandler(filters.Regex(r"(.*9gag\.com\/gag\/.*)|(.*x\.com\/.*\/status\/.*)|(.*www.instagram\.com\/reel.*)|(.*.tiktok.com\/)|(.*www\.facebook\.com\/reel.*)|(.*fb\.watch\/.*)|(.*www\.facebook\.com\/share.*)|(.*(www\.|)youtube\.com\/shorts\/.*)"), download))
 app.add_handler(MessageHandler(filters.Regex(r"initCurrentTopicAsMemeBotTopic"),initMemeTopic))
 app.add_handler(MessageHandler(filters.Regex(r"resetMemeTopic"),resetMemeTopic))
 app.add_handler(MessageHandler(filters.Regex(r".*banana*."),testFunc))
