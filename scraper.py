@@ -65,7 +65,7 @@ def download_reel_dlp(download_url, from_user):
     return file_path
 
 def get_video_url(download_url):
-    for i in range(1):
+    for i in range(10):
         time.sleep(i)
         try:
             video_url = get_video_link_rapid_api(download_url)
