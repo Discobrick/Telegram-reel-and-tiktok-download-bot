@@ -18,9 +18,18 @@ def get_video_link_rapid_api(download_url):
 
     link_identifiers = os.environ.get('RAPID_API_LINK_IDENTIFIED').split(";")
     response = requests.get(url, headers=headers, params=querystring)
-    for item in response.json()['links']:
-        if item['quality'] in link_identifiers:
-            return item['link']
+    
+    
+    if re.match(r"(.*www\.facebook\.com\/reel.*)|(.*fb\.watch\/.*)|(.*www\.facebook\.com\/share.*)",download_url):        
+        return response.json()['links'][0]['link']
+    
+    if re.match(r".*.tiktok.com\/",download_url):        
+        return response.json()['links'][0]['link']
+    
+    
+    # for item in response.json()['links']:
+    #     if item['quality'] in link_identifiers:
+    #         return item['link']
         
         
 def download_with_dlp(download_url,opts):
@@ -48,14 +57,15 @@ def download_reel_dlp(download_url, from_user):
     ydl_opts = {
         # "format": "best[ext=mp4]",
         'outtmpl':file_path,
-        # 'allowed_extractors': ['all'],
-        # 'verbose': True
+        'final_ext': 'mp4',
+        'format_sort': ['res', 'ext:mp4:m4a'],
+        'postprocessors': [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
     }
     download_with_dlp(download_url,ydl_opts)
     return file_path
 
 def get_video_url(download_url):
-    for i in range(10):
+    for i in range(1):
         time.sleep(i)
         try:
             video_url = get_video_link_rapid_api(download_url)
