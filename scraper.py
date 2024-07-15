@@ -46,7 +46,7 @@ def download_reel_rapid(download_url, from_user):
 def download_reel_dlp(download_url, from_user):
     file_path = '/app/' + datetime.now().strftime("%d%m%Y%H%M%S") + ".mp4"
     ydl_opts = {
-        "format": "best[ext=mp4]",
+        # "format": "best[ext=mp4]",
         'outtmpl':file_path,
         # 'allowed_extractors': ['all'],
         # 'verbose': True
