@@ -6,30 +6,6 @@ import requests
 import yt_dlp
 import re
 
-def get_video_link_rapid_api(download_url):
-    url = "https://social-media-video-downloader.p.rapidapi.com/smvd/get/all"
-    querystring = {
-        "url": download_url, "filename": "video"}
-
-    headers = {
-        "X-RapidAPI-Key": os.environ.get('RAPID_API_KEY'),
-        "X-RapidAPI-Host": "social-media-video-downloader.p.rapidapi.com"
-    }
-
-    link_identifiers = os.environ.get('RAPID_API_LINK_IDENTIFIED').split(";")
-    response = requests.get(url, headers=headers, params=querystring)
-    
-    
-    if re.match(r"(.*www\.facebook\.com\/reel.*)|(.*fb\.watch\/.*)|(.*www\.facebook\.com\/share.*)",download_url):        
-        return response.json()['links'][0]['link']
-    
-    if re.match(r".*.tiktok.com\/",download_url):        
-        return response.json()['links'][0]['link']
-    
-    
-    # for item in response.json()['links']:
-    #     if item['quality'] in link_identifiers:
-    #         return item['link']
         
         
 def download_with_dlp(download_url,opts):
@@ -37,9 +13,7 @@ def download_with_dlp(download_url,opts):
         ydl.download(download_url)
 
 def download_reel(download_url,from_user):
-    if re.match(r"(.*.tiktok.com\/)|(.*www\.facebook\.com\/reel.*)|(.*fb\.watch\/.*)|(.*www\.facebook\.com\/share.*)",download_url):
-        return download_reel_rapid(download_url,from_user)
-    if re.match(r"(.*9gag\.com\/gag\/.*)|(.*x\.com\/.*\/status\/.*)|(.*www\.instagram\.com\/reel.*)|(.*(www\.|)youtube\.com\/shorts\/.*)",download_url):
+    if re.match(r"(.*9gag\.com\/gag\/.*)|(.*x\.com\/.*\/status\/.*)|(.*www\.instagram\.com\/reel.*)|(.*(www\.|)youtube\.com\/shorts\/.*)|(.*.tiktok.com\/)|(.*www\.facebook\.com\/share.*)|(.*fb\.watch\/.*)",download_url):
         return download_reel_dlp(download_url,from_user)
 
 
