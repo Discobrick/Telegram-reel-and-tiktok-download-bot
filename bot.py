@@ -2,7 +2,7 @@ import logging as log
 import os
 import traceback
 from telegram import Update
-from telegram import ReactionType,ReactionTypeEmoji
+from telegram import ReactionTypeEmoji
 from telegram.ext import (ApplicationBuilder, MessageHandler,filters)
 
 
