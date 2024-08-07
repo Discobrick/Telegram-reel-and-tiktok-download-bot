@@ -31,8 +31,9 @@ def download_reel_dlp(download_url, from_user):
     ydl_opts = {
         # "format": "best[ext=mp4]",
         'outtmpl':file_path,
-        'final_ext': 'mp4',
-        'format_sort': ['res', 'ext:mp4:m4a'],
+        # 'final_ext': 'mp4',
+        'format': 'bestvideo[vcodec^=avc]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        'format_sort': ['res', 'ext:mp4:m4a','vcodec:h264'],
         'postprocessors': [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
     }
     download_with_dlp(download_url,ydl_opts)
