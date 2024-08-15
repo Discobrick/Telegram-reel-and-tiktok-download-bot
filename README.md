@@ -1,6 +1,5 @@
 # Telegram-reel-and-tiktok-download-bot
 
-Simple bot to download youtube/tiktok/instagra/facebook videos via RAPIDAPI https://rapidapi.com/ugoBoy/api/social-media-video-downloader
 
 USAGE:
 
