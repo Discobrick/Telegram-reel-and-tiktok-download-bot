@@ -13,7 +13,7 @@ RUN apt-get update \
 
 RUN pip3 install requests
 RUN pip3 install python-telegram-bot==20.8
-RUN pip install yt-dlp
+RUN pip3 install -U --pre "yt-dlp[default]"
 
 ENTRYPOINT [ "python3" ]
 
