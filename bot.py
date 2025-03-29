@@ -4,6 +4,7 @@ Telegram bot for downloading videos from various platforms.
 This module provides a Telegram bot that can download videos from platforms
 like 9GAG, Twitter/X, Instagram Reels, TikTok, Facebook Reels, and YouTube Shorts.
 """
+import json
 import logging as log
 import os
 import re
@@ -26,9 +27,57 @@ log.basicConfig(
 
 logger = log.getLogger(__name__)
 
+# File path for persistent preferences
+PREFERENCES_FILE = '/app/data/preferences.json'
+
 # Store preferences by chat_id and user_id
 # Format: preferences[chat_id][user_id] = {'show_description': bool, 'target_chat_id': int, ...}
 preferences = {}
+
+def load_preferences():
+    """Load preferences from file if it exists."""
+    global preferences
+    try:
+        if os.path.exists(PREFERENCES_FILE):
+            with open(PREFERENCES_FILE, 'r', encoding='utf-8') as f:
+                # JSON can't use integers as keys, so they're stored as strings
+                # We need to convert them back to integers
+                string_prefs = json.load(f)
+                preferences = {
+                    int(chat_id): {
+                        int(user_id): prefs 
+                        for user_id, prefs in chat_prefs.items()
+                    }
+                    for chat_id, chat_prefs in string_prefs.items()
+                }
+            logger.info("Preferences loaded from %s", PREFERENCES_FILE)
+        else:
+            logger.info("No preferences file found at %s, using empty preferences", PREFERENCES_FILE)
+    except Exception as e:
+        logger.error("Failed to load preferences: %s", str(e))
+        # Continue with empty preferences if loading fails
+
+def save_preferences():
+    """Save preferences to file."""
+    try:
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(PREFERENCES_FILE), exist_ok=True)
+        
+        # Convert integer keys to strings for JSON serialization
+        string_prefs = {
+            str(chat_id): {
+                str(user_id): prefs 
+                for user_id, prefs in chat_prefs.items()
+            }
+            for chat_id, chat_prefs in preferences.items()
+        }
+        
+        with open(PREFERENCES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(string_prefs, f, indent=2)
+        
+        logger.info("Preferences saved to %s", PREFERENCES_FILE)
+    except Exception as e:
+        logger.error("Failed to save preferences: %s", str(e))
 
 def get_user_prefs(chat_id, user_id):
     """Get user preferences for a specific chat."""
@@ -51,6 +100,9 @@ async def toggle_description(update: Update, _context) -> None:
     current_preference = user_prefs.get('show_description', False)
     user_prefs['show_description'] = not current_preference
 
+    # Save preferences to persistent storage
+    save_preferences()
+
     # Confirm to the user
     status = "enabled" if user_prefs['show_description'] else "disabled"
     await update.message.reply_text(f"Video descriptions are now {status} for your downloads in this chat.")
@@ -67,6 +119,9 @@ async def set_topic_channel(update: Update, _context) -> None:
     # Save the target channel/topic information
     user_prefs['target_chat_id'] = chat_id
     user_prefs['target_topic_id'] = message_thread_id
+
+    # Save preferences to persistent storage
+    save_preferences()
 
     # Create confirmation message based on whether it's a topic or just a chat
     if message_thread_id:
@@ -87,6 +142,9 @@ async def clear_topic_channel(update: Update, _context) -> None:
         del user_prefs['target_chat_id']
     if 'target_topic_id' in user_prefs:
         del user_prefs['target_topic_id']
+
+    # Save preferences to persistent storage
+    save_preferences()
 
     await update.message.reply_text("❌ Target topic/chat has been cleared. Videos will now be sent to the chat where links are shared.")
     logger.info("User %s in chat %s cleared target chat/topic setting", user_id, chat_id)
@@ -319,6 +377,9 @@ async def create_failed_link_report(update: Update, _context) -> None:
 
 def main():
     """Start the bot."""
+    # Load preferences from persistent storage
+    load_preferences()
+
     # Create the Application and pass the bot's token
     app = ApplicationBuilder().token(os.environ.get("BOT_API_KEY")).build()
 
