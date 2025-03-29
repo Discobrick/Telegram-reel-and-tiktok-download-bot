@@ -1,7 +1,7 @@
 import logging as log
 import os
 import traceback
-from telegram import Update
+from telegram import Update, InputMediaVideo
 from telegram import ReactionTypeEmoji
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
 
@@ -21,24 +21,35 @@ log.basicConfig(
 
 logger = log.getLogger(__name__)
 
-# Store user preferences
-user_preferences = {}
+# Store preferences by chat_id and user_id
+# Format: preferences[chat_id][user_id] = {'show_description': bool, 'target_chat_id': int, ...}
+preferences = {}
+
+def get_user_prefs(chat_id, user_id):
+    """Get user preferences for a specific chat."""
+    if chat_id not in preferences:
+        preferences[chat_id] = {}
+    
+    if user_id not in preferences[chat_id]:
+        preferences[chat_id][user_id] = {}
+    
+    return preferences[chat_id][user_id]
 
 async def toggle_description(update: Update, context) -> None:
     """Toggle showing descriptions for videos."""
     user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    
+    user_prefs = get_user_prefs(chat_id, user_id)
     
     # Toggle the preference
-    current_preference = user_preferences.get(user_id, {}).get('show_description', False)
-    if not user_id in user_preferences:
-        user_preferences[user_id] = {}
-    
-    user_preferences[user_id]['show_description'] = not current_preference
+    current_preference = user_prefs.get('show_description', False)
+    user_prefs['show_description'] = not current_preference
     
     # Confirm to the user
-    status = "enabled" if user_preferences[user_id]['show_description'] else "disabled"
-    await update.message.reply_text(f"Video descriptions are now {status} for your downloads.")
-    logger.info(f"User {user_id} set description preference to {status}")
+    status = "enabled" if user_prefs['show_description'] else "disabled"
+    await update.message.reply_text(f"Video descriptions are now {status} for your downloads in this chat.")
+    logger.info(f"User {user_id} in chat {chat_id} set description preference to {status}")
 
 async def set_topic_channel(update: Update, context) -> None:
     """Set current topic/channel as target for video downloads."""
@@ -46,34 +57,34 @@ async def set_topic_channel(update: Update, context) -> None:
     chat_id = update.effective_chat.id
     message_thread_id = update.effective_message.message_thread_id if hasattr(update.effective_message, 'message_thread_id') else None
     
-    # Initialize user preferences if needed
-    if not user_id in user_preferences:
-        user_preferences[user_id] = {}
+    user_prefs = get_user_prefs(chat_id, user_id)
     
     # Save the target channel/topic information
-    user_preferences[user_id]['target_chat_id'] = chat_id
-    user_preferences[user_id]['target_topic_id'] = message_thread_id
+    user_prefs['target_chat_id'] = chat_id
+    user_prefs['target_topic_id'] = message_thread_id
     
     # Create confirmation message based on whether it's a topic or just a chat
     if message_thread_id:
         await update.message.reply_text("✅ This topic has been set as your target for video downloads.")
-        logger.info(f"User {user_id} set topic {message_thread_id} in chat {chat_id} as target")
+        logger.info(f"User {user_id} in chat {chat_id} set topic {message_thread_id} as target")
     else:
         await update.message.reply_text("✅ This chat has been set as your target for video downloads.")
-        logger.info(f"User {user_id} set chat {chat_id} as target")
+        logger.info(f"User {user_id} in chat {chat_id} set chat {chat_id} as target")
 
 async def clear_topic_channel(update: Update, context) -> None:
     """Clear the target topic/channel setting."""
     user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
     
-    if user_id in user_preferences:
-        if 'target_chat_id' in user_preferences[user_id]:
-            del user_preferences[user_id]['target_chat_id']
-        if 'target_topic_id' in user_preferences[user_id]:
-            del user_preferences[user_id]['target_topic_id']
+    user_prefs = get_user_prefs(chat_id, user_id)
+    
+    if 'target_chat_id' in user_prefs:
+        del user_prefs['target_chat_id']
+    if 'target_topic_id' in user_prefs:
+        del user_prefs['target_topic_id']
     
     await update.message.reply_text("❌ Target topic/chat has been cleared. Videos will now be sent to the chat where links are shared.")
-    logger.info(f"User {user_id} cleared target chat/topic setting")
+    logger.info(f"User {user_id} in chat {chat_id} cleared target chat/topic setting")
 
 async def download(update: Update, context) -> None:
     """Gets video URLs from a telegram message, downloads the videos, and sends messages with them."""
@@ -82,13 +93,17 @@ async def download(update: Update, context) -> None:
         urls = re.findall(r"(https?://\S+)", update.message.text)
         
         user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
         
-        # Check if the user wants descriptions
-        show_description = user_preferences.get(user_id, {}).get('show_description', False)
+        # Get user preferences for this specific chat
+        user_prefs = get_user_prefs(chat_id, user_id)
         
-        # Check if the user has a designated target chat/topic
-        target_chat_id = user_preferences.get(user_id, {}).get('target_chat_id', None)
-        target_topic_id = user_preferences.get(user_id, {}).get('target_topic_id', None)
+        # Check if the user wants descriptions in this chat
+        show_description = user_prefs.get('show_description', False)
+        
+        # Check if the user has a designated target chat/topic for this chat
+        target_chat_id = user_prefs.get('target_chat_id', None)
+        target_topic_id = user_prefs.get('target_topic_id', None)
         
         # Use original chat if no target is set
         if target_chat_id is None:
@@ -104,38 +119,28 @@ async def download(update: Update, context) -> None:
                 await update.message.set_reaction(reaction=ReactionTypeEmoji("⚡"))
                 
                 if show_description:
+                    # With descriptions enabled, include video info
                     file_path, video_info = download_reel(url, get_description=True)
                     
                     # Create a caption with video information
                     caption = format_video_caption(update, video_info)
-                    
-                    # Send to the target chat/topic
-                    await context.bot.send_video(
-                        chat_id=target_chat_id,
-                        message_thread_id=target_topic_id,
-                        video=open(file_path, 'rb'),
-                        caption=caption,
-                        disable_notification=True,
-                        read_timeout=600,
-                        write_timeout=600,
-                        connect_timeout=600,
-                        pool_timeout=600,
-                    )
                 else:
+                    # Without descriptions, just download the video
                     file_path = download_reel(url)
-                    
-                    # Send to the target chat/topic
-                    await context.bot.send_video(
-                        chat_id=target_chat_id,
-                        message_thread_id=target_topic_id,
-                        video=open(file_path, 'rb'),
-                        caption=from_user(update),
-                        disable_notification=True,
-                        read_timeout=600,
-                        write_timeout=600,
-                        connect_timeout=600,
-                        pool_timeout=600,
-                    )
+                    caption = from_user(update)
+                
+                # Send to the target chat/topic
+                await context.bot.send_video(
+                    chat_id=target_chat_id,
+                    message_thread_id=target_topic_id,
+                    video=open(file_path, 'rb'),
+                    caption=caption,
+                    disable_notification=True,
+                    read_timeout=600,
+                    write_timeout=600,
+                    connect_timeout=600,
+                    pool_timeout=600,
+                )
                 
                 os.remove(file_path)
                 success_count += 1
@@ -155,18 +160,6 @@ async def download(update: Update, context) -> None:
                 with open('failed_links.log', 'a') as f:
                     f.write(f"{url} - Error: {str(e)}\n")
         
-        # Set final reaction based on results
-        if success_count > 0 and failure_count == 0:
-            await update.message.set_reaction(reaction=ReactionTypeEmoji("⚡"))
-        elif success_count > 0 and failure_count > 0:
-            await update.message.set_reaction(reaction=ReactionTypeEmoji("⚡"))
-        else:
-            await update.message.set_reaction(reaction=ReactionTypeEmoji("⚡"))
-        
-        # If videos were sent to a different chat/topic, inform the user
-        if (target_chat_id != update.effective_chat.id or 
-            (target_topic_id != (update.effective_message.message_thread_id if hasattr(update.effective_message, 'message_thread_id') else None))):
-            await update.message.reply_text(f"✅ Downloaded {success_count} videos and sent them to your designated topic/channel.")
         
         # Delete the original message with links
         await update.effective_message.delete()
