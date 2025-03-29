@@ -235,9 +235,9 @@ async def help_command(update: Update, context) -> None:
         "/start - Start the bot\n"
         "/help - Show this help message\n"
         "/report - Generate a report of failed downloads\n"
-        "optInDescription - Toggle video descriptions on/off\n"
-        "initCurrentTopicAsMemeBotTopic - Set current chat/topic as target for downloads\n"
-        "clearMemeBotTopic - Clear target chat/topic setting\n\n"
+        "/toggledesc - Toggle video descriptions on/off\n"
+        "/settopic - Set current chat/topic as target for downloads\n"
+        "/cleartopic - Clear target chat/topic setting\n\n"
         "📱 *Supported Platforms*:\n"
         "• 9GAG\n"
         "• Twitter/X\n"
@@ -304,7 +304,12 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("report", create_failed_link_report))
     
-    # Add handlers for preferences
+    # Add handlers for preferences (as commands now)
+    app.add_handler(CommandHandler("toggledesc", toggle_description))
+    app.add_handler(CommandHandler("settopic", set_topic_channel))
+    app.add_handler(CommandHandler("cleartopic", clear_topic_channel))
+    
+    # Keep old message handlers for backward compatibility
     app.add_handler(MessageHandler(filters.Regex(r"^optInDescription$"), toggle_description))
     app.add_handler(MessageHandler(filters.Regex(r"^initCurrentTopicAsMemeBotTopic$"), set_topic_channel))
     app.add_handler(MessageHandler(filters.Regex(r"^clearMemeBotTopic$"), clear_topic_channel))
