@@ -5,19 +5,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        - VERSION=latest
-    image: python:3.12-slim
+    image: botty_mcbotface:latest
     container_name: botty_mcbotface
-    user: 1200:1200
+    user: "1200:1200"
     env_file:
       - .env
     working_dir: /app
     restart: unless-stopped
     labels:
       - authors="Discobrick"
-      - org.opencontainers.image.ref.name=ubuntu
-      - org.opencontainers.image.version=20.04
-    # command: "/usr/bin/python3 bot.py &"
+      - org.opencontainers.image.ref.name=botty_mcbotface
+      - org.opencontainers.image.version=latest
     runtime: runc
-
+    volumes:
+      - ./data:/app/data
