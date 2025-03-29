@@ -96,47 +96,69 @@ async def download(update: Update, context) -> None:
     try:
         await update.message.set_reaction(reaction=ReactionTypeEmoji("👀"))
         urls = re.findall(r"(https?://\S+)", update.message.text)
-
+        
         user_id = update.effective_user.id
         chat_id = update.effective_chat.id
-
+        
         # Get user preferences for this specific chat
         user_prefs = get_user_prefs(chat_id, user_id)
-
+        
         # Check if the user wants descriptions in this chat
         show_description = user_prefs.get('show_description', False)
-
+        
         # Check if the user has a designated target chat/topic for this chat
         target_chat_id = user_prefs.get('target_chat_id', None)
         target_topic_id = user_prefs.get('target_topic_id', None)
-
+        
         # Use original chat if no target is set
         if target_chat_id is None:
             target_chat_id = update.effective_chat.id
             target_topic_id = update.effective_message.message_thread_id if hasattr(update.effective_message, 'message_thread_id') else None
-
+        
         success_count = 0
         failure_count = 0
-
+        
         for url in urls:
             logger.info("Processing URL: %s", url)
             try:
                 await update.message.set_reaction(reaction=ReactionTypeEmoji("⚡"))
-
+                
                 if show_description:
                     # With descriptions enabled, include video info
                     file_path, video_info = download_reel(url, get_description=True)
-
+                    
                     # Create a caption with video information
-                    caption = format_video_caption(update, video_info)
+                    full_caption = format_video_caption(update, video_info)
+                    
+                    # Check if caption exceeds Telegram's limit
+                    if len(full_caption) > 1024:
+                        # For the video, use a truncated caption
+                        caption = full_caption[:1021] + "..."
+                        
+                        # Prepare additional messages for the rest of the caption
+                        remaining_text = full_caption[1021:]
+                        
+                        # Split remaining text into chunks of 1024 characters (Telegram message limit)
+                        text_chunks = []
+                        while remaining_text:
+                            if len(remaining_text) <= 1024:
+                                text_chunks.append(remaining_text)
+                                remaining_text = ""
+                            else:
+                                text_chunks.append(remaining_text[:1021] + "...")
+                                remaining_text = remaining_text[1021:]
+                    else:
+                        caption = full_caption
+                        text_chunks = []
                 else:
                     # Without descriptions, just download the video
                     file_path = download_reel(url)
                     caption = from_user(update)
-
-                # Send to the target chat/topic
+                    text_chunks = []
+                
+                # Send the video with the (possibly truncated) caption
                 with open(file_path, 'rb') as video_file:
-                    await context.bot.send_video(
+                    sent_message = await context.bot.send_video(
                         chat_id=target_chat_id,
                         message_thread_id=target_topic_id,
                         video=video_file,
@@ -147,13 +169,23 @@ async def download(update: Update, context) -> None:
                         connect_timeout=600,
                         pool_timeout=600,
                     )
-
+                
+                # Send additional messages with the rest of the caption if needed
+                for chunk in text_chunks:
+                    await context.bot.send_message(
+                        chat_id=target_chat_id,
+                        message_thread_id=target_topic_id,
+                        text=chunk,
+                        disable_notification=True,
+                        reply_to_message_id=sent_message.message_id
+                    )
+                
                 os.remove(file_path)
                 success_count += 1
             except Exception as e:
                 failure_count += 1
                 logger.error("Error processing URL %s: %s", url, str(e))
-
+                
                 # More specific error message - send to the original chat not the target
                 error_msg = str(e)
                 if "unsupported URL" in error_msg.lower():
@@ -162,17 +194,17 @@ async def download(update: Update, context) -> None:
                     await update.message.reply_text(f"❌ Content unavailable due to copyright: {url}")
                 else:
                     await update.message.reply_text(f"❌ Failed to process URL: {url}\nError: {error_msg[:100]}...")
-
+                
                 with open('failed_links.log', 'a', encoding='utf-8') as f:
                     f.write(f"{url} - Error: {str(e)}\n")
-
+        
         # Delete the original message with links
         await update.effective_message.delete()
     except Exception as e:
         await update.message.set_reaction(reaction=ReactionTypeEmoji("👎"))
         logger.error("General error: %s", str(e))
         logger.error(traceback.format_exc())
-
+        
         with open('failed_links.log', 'a', encoding='utf-8') as f:
             f.write(f"{update.message.text} - General error: {str(e)}\n")
 
@@ -180,14 +212,14 @@ def format_video_caption(update, video_info):
     """Format video information into a caption."""
     # Start with the user info
     caption = from_user(update) + "\n\n"
-
+    
     # Add video information
     caption += f"📹 *{video_info.get('title', 'No title')}*\n"
-
+    
     # Add uploader if available
     if video_info.get('uploader') and video_info.get('uploader') != 'Unknown uploader':
         caption += f"👤 {video_info.get('uploader')}\n"
-
+    
     # Format the date if available
     upload_date = video_info.get('upload_date')
     if upload_date and upload_date != 'Unknown date':
@@ -196,25 +228,16 @@ def format_video_caption(update, video_info):
             caption += f"📅 {formatted_date}\n"
         except IndexError:
             pass
-
+    
     # Add view count if available
     if video_info.get('view_count') and video_info.get('view_count') != 'Unknown views':
         caption += f"👁 {video_info.get('view_count')} views\n"
-
-    # Add description (truncated if too long)
+    
+    # Add description without truncating
     description = video_info.get('description', '')
     if description and description != 'No description available':
-        # Truncate if needed to stay within Telegram's limits
-        max_desc_len = 800  # Leave room for other caption content
-        if len(description) > max_desc_len:
-            description = description[:max_desc_len] + "..."
-
         caption += f"{description}"
-
-    # Ensure we don't exceed Telegram's caption limit (1024 characters)
-    if len(caption) > 1024:
-        caption = caption[:1021] + "..."
-
+    
     return caption
 
 def from_user(update):
