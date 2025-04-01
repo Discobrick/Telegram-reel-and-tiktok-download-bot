@@ -9,30 +9,58 @@ import logging as log
 import os
 import re
 import traceback
+import asyncio
+import concurrent.futures
 from telegram import Update, InputMediaVideo
 from telegram import ReactionTypeEmoji
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
 
 from scraper import download_reel
 
+# File path for persistent preferences - using /data for the named Docker volume
+PREFERENCES_FILE = os.environ.get('PREFERENCES_FILE', '/data/preferences.json')
+DATA_DIR = os.path.dirname(PREFERENCES_FILE)
+
+# Create a fallback directory for logs if DATA_DIR isn't writable
+try:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    # Test if the directory is writable by creating a temporary file
+    test_file = os.path.join(DATA_DIR, '.write_test')
+    with open(test_file, 'w') as f:
+        f.write('test')
+    os.remove(test_file)
+    # DATA_DIR is writable, use it
+    LOG_DIR = DATA_DIR
+except (IOError, PermissionError):
+    # DATA_DIR not writable, use a local directory instead
+    LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+    os.makedirs(LOG_DIR, exist_ok=True)
+    print(f"Warning: Cannot write to {DATA_DIR}, using {LOG_DIR} instead")
+
+# Log files paths
+ERROR_LOG_FILE = os.environ.get('ERROR_LOG_FILE', os.path.join(LOG_DIR, 'error.log'))
+FAILED_LINKS_LOG_FILE = os.environ.get('FAILED_LINKS_LOG_FILE', os.path.join(LOG_DIR, 'failed_links.log'))
+
 # Configure logging to file and console
 log.basicConfig(
     level=log.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        log.FileHandler('error.log'),
+        log.FileHandler(ERROR_LOG_FILE),
         log.StreamHandler()
     ]
 )
 
 logger = log.getLogger(__name__)
 
-# File path for persistent preferences
-PREFERENCES_FILE = '/app/data/preferences.json'
-
 # Store preferences by chat_id and user_id
 # Format: preferences[chat_id][user_id] = {'show_description': bool, 'target_chat_id': int, ...}
 preferences = {}
+
+# Thread pool executor for parallel downloads
+# We'll limit the number of concurrent downloads to avoid overwhelming the system
+MAX_WORKERS = os.environ.get('MAX_WORKERS', 5)
+thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=int(MAX_WORKERS))
 
 def load_preferences():
     """Load preferences from file if it exists."""
@@ -53,6 +81,10 @@ def load_preferences():
             logger.info("Preferences loaded from %s", PREFERENCES_FILE)
         else:
             logger.info("No preferences file found at %s, using empty preferences", PREFERENCES_FILE)
+            # Create the directory if it doesn't exist
+            os.makedirs(os.path.dirname(PREFERENCES_FILE), exist_ok=True)
+            # Initialize empty preferences file
+            save_preferences()
     except Exception as e:
         logger.error("Failed to load preferences: %s", str(e))
         # Continue with empty preferences if loading fails
@@ -149,6 +181,79 @@ async def clear_topic_channel(update: Update, _context) -> None:
     await update.message.reply_text("❌ Target topic/chat has been cleared. Videos will now be sent to the chat where links are shared.")
     logger.info("User %s in chat %s cleared target chat/topic setting", user_id, chat_id)
 
+def process_single_url(url, update, context, show_description, target_chat_id, target_topic_id):
+    """Process a single URL for download and sending to the user.
+    
+    This function runs in a separate thread for each URL and returns the result.
+    """
+    try:
+        logger.info("Processing URL: %s", url)
+        
+        if show_description:
+            # With descriptions enabled, include video info
+            file_path, video_info = download_reel(url, get_description=True)
+            
+            # Create a caption with video information
+            full_caption = format_video_caption(update, video_info)
+            
+            # Check if caption exceeds Telegram's limit
+            if len(full_caption) > 1024:
+                # For the video, use a truncated caption
+                caption = full_caption[:1021] + "..."
+                
+                # Prepare additional messages for the rest of the caption
+                remaining_text = full_caption[1021:]
+                
+                # Split remaining text into chunks of 1024 characters (Telegram message limit)
+                text_chunks = []
+                while remaining_text:
+                    if len(remaining_text) <= 1024:
+                        text_chunks.append(remaining_text)
+                        remaining_text = ""
+                    else:
+                        text_chunks.append(remaining_text[:1021] + "...")
+                        remaining_text = remaining_text[1021:]
+            else:
+                caption = full_caption
+                text_chunks = []
+        else:
+            # Without descriptions, just download the video
+            file_path = download_reel(url)
+            caption = from_user(update)
+            text_chunks = []
+        
+        return True, None, url, file_path, caption, text_chunks
+    except Exception as e:
+        error_msg = str(e)
+        logger.error("Error processing URL %s: %s", url, error_msg)
+        
+        # Log the failed URL
+        os.makedirs(os.path.dirname(FAILED_LINKS_LOG_FILE), exist_ok=True)
+        with open(FAILED_LINKS_LOG_FILE, 'a', encoding='utf-8') as f:
+            f.write(f"{url} - Error: {str(e)}\n")
+            
+        return False, error_msg, url, None, None, None
+
+async def download_url_in_thread(url, update, context, show_description, target_chat_id, target_topic_id):
+    """Run the URL download process in a separate thread.
+    
+    This function wraps process_single_url to be run in a thread pool executor,
+    enabling parallel downloads.
+    """
+    try:
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
+        logger.info("Starting new download thread for URL: %s (User: %s, Chat: %s)", url, user_id, chat_id)
+        
+        # Use run_in_executor to run the CPU-bound download operation in a separate thread
+        return await asyncio.get_event_loop().run_in_executor(
+            thread_pool,
+            lambda: process_single_url(url, update, context, show_description, target_chat_id, target_topic_id)
+        )
+    except Exception as e:
+        logger.error("Error in download thread for URL %s: %s", url, str(e))
+        return False, str(e), url
+
 async def download(update: Update, context) -> None:
     """Gets video URLs from a telegram message, downloads the videos, and sends messages with them."""
     try:
@@ -176,86 +281,64 @@ async def download(update: Update, context) -> None:
         success_count = 0
         failure_count = 0
         
+        # Use asyncio.gather with run_in_executor to run downloads in parallel
+        tasks = []
         for url in urls:
-            logger.info("Processing URL: %s", url)
-            try:
-                await update.message.set_reaction(reaction=ReactionTypeEmoji("⚡"))
-                
-                if show_description:
-                    # With descriptions enabled, include video info
-                    file_path, video_info = download_reel(url, get_description=True)
+            # Create a task for each URL to download and process
+            task = asyncio.create_task(
+                download_url_in_thread(url, update, context, show_description, target_chat_id, target_topic_id)
+            )
+            tasks.append(task)
+        
+        # Wait for all tasks to complete
+        results = await asyncio.gather(*tasks)
+        
+        # Process results
+        for success, error_msg, url, file_path, caption, text_chunks in results:
+            if success:
+                # Send the video with the caption
+                try:
+                    with open(file_path, 'rb') as video_file:
+                        sent_message = await context.bot.send_video(
+                            chat_id=target_chat_id,
+                            message_thread_id=target_topic_id,
+                            video=video_file,
+                            caption=caption,
+                            disable_notification=True,
+                            read_timeout=600,
+                            write_timeout=600,
+                            connect_timeout=600,
+                            pool_timeout=600,
+                        )
                     
-                    # Create a caption with video information
-                    full_caption = format_video_caption(update, video_info)
+                    # Send additional messages with the rest of the caption if needed
+                    for chunk in text_chunks:
+                        await context.bot.send_message(
+                            chat_id=target_chat_id,
+                            message_thread_id=target_topic_id,
+                            text=chunk,
+                            disable_notification=True,
+                            reply_to_message_id=sent_message.message_id
+                        )
                     
-                    # Check if caption exceeds Telegram's limit
-                    if len(full_caption) > 1024:
-                        # For the video, use a truncated caption
-                        caption = full_caption[:1021] + "..."
-                        
-                        # Prepare additional messages for the rest of the caption
-                        remaining_text = full_caption[1021:]
-                        
-                        # Split remaining text into chunks of 1024 characters (Telegram message limit)
-                        text_chunks = []
-                        while remaining_text:
-                            if len(remaining_text) <= 1024:
-                                text_chunks.append(remaining_text)
-                                remaining_text = ""
-                            else:
-                                text_chunks.append(remaining_text[:1021] + "...")
-                                remaining_text = remaining_text[1021:]
-                    else:
-                        caption = full_caption
-                        text_chunks = []
-                else:
-                    # Without descriptions, just download the video
-                    file_path = download_reel(url)
-                    caption = from_user(update)
-                    text_chunks = []
-                
-                # Send the video with the (possibly truncated) caption
-                with open(file_path, 'rb') as video_file:
-                    sent_message = await context.bot.send_video(
-                        chat_id=target_chat_id,
-                        message_thread_id=target_topic_id,
-                        video=video_file,
-                        caption=caption,
-                        disable_notification=True,
-                        read_timeout=600,
-                        write_timeout=600,
-                        connect_timeout=600,
-                        pool_timeout=600,
-                    )
-                
-                # Send additional messages with the rest of the caption if needed
-                for chunk in text_chunks:
-                    await context.bot.send_message(
-                        chat_id=target_chat_id,
-                        message_thread_id=target_topic_id,
-                        text=chunk,
-                        disable_notification=True,
-                        reply_to_message_id=sent_message.message_id
-                    )
-                
-                os.remove(file_path)
-                success_count += 1
-            except Exception as e:
+                    # Clean up the file
+                    os.remove(file_path)
+                    success_count += 1
+                    await update.message.set_reaction(reaction=ReactionTypeEmoji("⚡"))
+                except Exception as e:
+                    failure_count += 1
+                    logger.error("Error sending video for URL %s: %s", url, str(e))
+                    await update.message.reply_text(f"❌ Failed to send video: {url}\nError: {str(e)[:100]}...")
+            else:
                 failure_count += 1
-                logger.error("Error processing URL %s: %s", url, str(e))
-                
                 # More specific error message - send to the original chat not the target
-                error_msg = str(e)
                 if "unsupported URL" in error_msg.lower():
                     await update.message.reply_text(f"❌ Unsupported URL format: {url}")
                 elif "copyright" in error_msg.lower():
                     await update.message.reply_text(f"❌ Content unavailable due to copyright: {url}")
                 else:
                     await update.message.reply_text(f"❌ Failed to process URL: {url}\nError: {error_msg[:100]}...")
-                
-                with open('failed_links.log', 'a', encoding='utf-8') as f:
-                    f.write(f"{url} - Error: {str(e)}\n")
-        
+
         # Delete the original message with links
         await update.effective_message.delete()
     except Exception as e:
@@ -263,7 +346,9 @@ async def download(update: Update, context) -> None:
         logger.error("General error: %s", str(e))
         logger.error(traceback.format_exc())
         
-        with open('failed_links.log', 'a', encoding='utf-8') as f:
+        # Ensure directory for failed links log exists
+        os.makedirs(os.path.dirname(FAILED_LINKS_LOG_FILE), exist_ok=True)
+        with open(FAILED_LINKS_LOG_FILE, 'a', encoding='utf-8') as f:
             f.write(f"{update.message.text} - General error: {str(e)}\n")
 
 def format_video_caption(update, video_info):
@@ -345,7 +430,12 @@ async def test_func(update: Update, _context) -> None:
 async def create_failed_link_report(update: Update, _context) -> None:
     """Sends the content of failed_links.log to the user and clears the file."""
     try:
-        with open('failed_links.log', 'r', encoding='utf-8') as f:
+        # Check if failed links file exists
+        if not os.path.exists(FAILED_LINKS_LOG_FILE):
+            await update.message.reply_text("No failed links recorded.")
+            return
+            
+        with open(FAILED_LINKS_LOG_FILE, 'r', encoding='utf-8') as f:
             failed_links = f.read()
 
         if not failed_links:
@@ -354,26 +444,41 @@ async def create_failed_link_report(update: Update, _context) -> None:
 
         # If the report is too long, split it or send as a file
         if len(failed_links) > 4000:
-            with open('report.txt', 'w', encoding='utf-8') as f:
+            # Create the temporary report file in the same persistent directory
+            temp_report_file = os.path.join(DATA_DIR, 'report.txt')
+            
+            with open(temp_report_file, 'w', encoding='utf-8') as f:
                 f.write(failed_links)
 
-            with open('report.txt', 'rb') as f:
+            with open(temp_report_file, 'rb') as f:
                 await update.message.reply_document(
                     document=f,
                     filename='failed_links_report.txt',
                     caption="Report of failed downloads"
                 )
-            os.remove('report.txt')
+            
+            # Clean up temporary file
+            try:
+                os.remove(temp_report_file)
+            except Exception as e:
+                logger.warning("Could not remove temporary report file: %s", str(e))
         else:
             await update.message.reply_text(failed_links)
 
         # Clear the file after reporting
-        with open('failed_links.log', 'w', encoding='utf-8') as f:
-            pass
-
-        logger.info("Failed links report generated and file cleared")
+        try:
+            with open(FAILED_LINKS_LOG_FILE, 'w', encoding='utf-8') as f:
+                pass
+            logger.info("Failed links report generated and file cleared")
+        except Exception as e:
+            logger.error("Could not clear failed links file: %s", str(e))
+            await update.message.reply_text("Note: Could not clear failed links log.")
+            
     except FileNotFoundError:
         await update.message.reply_text("No failed links recorded.")
+    except Exception as e:
+        logger.error("Error generating report: %s", str(e))
+        await update.message.reply_text(f"Error generating report: {str(e)}")
 
 def main():
     """Start the bot."""

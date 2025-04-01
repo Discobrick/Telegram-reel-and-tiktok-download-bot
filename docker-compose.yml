@@ -1,4 +1,4 @@
-version: '3'
+﻿version: '3'
 
 services:
   botty_mcbotface:
@@ -11,11 +11,20 @@ services:
     env_file:
       - .env
     working_dir: /app
-    restart: unless-stopped
+    restart: always
     labels:
       - authors="Discobrick"
       - org.opencontainers.image.ref.name=botty_mcbotface
       - org.opencontainers.image.version=latest
     runtime: runc
+    environment:
+      - PREFERENCES_FILE=/data/preferences.json
+      - ERROR_LOG_FILE=/data/error.log
+      - FAILED_LINKS_LOG_FILE=/data/failed_links.log
+      - MAX_WORKERS=10
     volumes:
-      - ./data:/app/data
+      - bot-data:/data
+      # Using a named volume for all persistent data instead of binding to host files
+
+volumes:
+  bot-data:

@@ -2,7 +2,20 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN chown 1200:1200 /app
+# Create data directory and log files with proper permissions
+RUN mkdir -p /data && \
+    touch /data/preferences.json && \
+    touch /data/error.log && \
+    touch /data/failed_links.log && \
+    chown -R 1200:1200 /app && \
+    chown -R 1200:1200 /data && \
+    chmod 755 /data && \
+    chmod 666 /data/preferences.json && \
+    chmod 666 /data/error.log && \
+    chmod 666 /data/failed_links.log && \
+    # Create yt-dlp cache directory with proper permissions
+    mkdir -p /.cache/yt-dlp && \
+    chmod -R 777 /.cache
 
 COPY bot.py .
 COPY scraper.py .
