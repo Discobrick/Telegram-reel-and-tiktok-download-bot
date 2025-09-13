@@ -325,6 +325,7 @@ async def download(update: Update, context) -> None:
                     os.remove(file_path)
                     success_count += 1
                     await update.message.set_reaction(reaction=ReactionTypeEmoji("⚡"))
+                    await update.effective_message.delete()
                 except Exception as e:
                     failure_count += 1
                     logger.error("Error sending video for URL %s: %s", url, str(e))
