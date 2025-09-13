@@ -335,12 +335,15 @@ async def download(update: Update, context) -> None:
                 if "unsupported URL" in error_msg.lower():
                     logger.error(f"❌ Unsupported URL format: {url}")
                     logger.error(traceback.format_exc())
+                    await update.message.set_reaction(reaction=ReactionTypeEmoji("🖕"))
                 elif "copyright" in error_msg.lower():
                     logger.error(f"❌ Content unavailable due to copyright: {url}")
                     logger.error(traceback.format_exc())
+                    await update.message.set_reaction(reaction=ReactionTypeEmoji("🖕"))
                 else:
                     logger.error(f"❌ Failed to process URL: {url}\nError: {error_msg[:100]}...")
                     logger.error(traceback.format_exc())
+                    await update.message.set_reaction(reaction=ReactionTypeEmoji("🖕"))
 
     except Exception as e:
         await update.message.set_reaction(reaction=ReactionTypeEmoji("👎"))
