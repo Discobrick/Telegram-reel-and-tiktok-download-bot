@@ -1,5 +1,4 @@
-﻿version: '3'
-
+﻿
 services:
   botty_mcbotface:
     build:

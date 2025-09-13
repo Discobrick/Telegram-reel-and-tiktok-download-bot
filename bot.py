@@ -11,7 +11,7 @@ import re
 import traceback
 import asyncio
 import concurrent.futures
-from telegram import Update, InputMediaVideo
+from telegram import Update
 from telegram import ReactionTypeEmoji
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
 
@@ -333,14 +333,15 @@ async def download(update: Update, context) -> None:
                 failure_count += 1
                 # More specific error message - send to the original chat not the target
                 if "unsupported URL" in error_msg.lower():
-                    await update.message.reply_text(f"❌ Unsupported URL format: {url}")
+                    logger.error(f"❌ Unsupported URL format: {url}")
+                    logger.error(traceback.format_exc())
                 elif "copyright" in error_msg.lower():
-                    await update.message.reply_text(f"❌ Content unavailable due to copyright: {url}")
+                    logger.error(f"❌ Content unavailable due to copyright: {url}")
+                    logger.error(traceback.format_exc())
                 else:
-                    await update.message.reply_text(f"❌ Failed to process URL: {url}\nError: {error_msg[:100]}...")
+                    logger.error(f"❌ Failed to process URL: {url}\nError: {error_msg[:100]}...")
+                    logger.error(traceback.format_exc())
 
-        # Delete the original message with links
-        await update.effective_message.delete()
     except Exception as e:
         await update.message.set_reaction(reaction=ReactionTypeEmoji("👎"))
         logger.error("General error: %s", str(e))
