@@ -68,9 +68,16 @@ def load_preferences():
     try:
         if os.path.exists(PREFERENCES_FILE):
             with open(PREFERENCES_FILE, 'r', encoding='utf-8') as f:
-                # JSON can't use integers as keys, so they're stored as strings
-                # We need to convert them back to integers
-                string_prefs = json.load(f)
+                try:
+                    # JSON can't use integers as keys, so they're stored as strings
+                    # We need to convert them back to integers
+                    string_prefs = json.load(f)
+                except json.JSONDecodeError:
+                    logger.warning("Preferences file %s is empty or corrupted; reinitializing", PREFERENCES_FILE)
+                    preferences = {}
+                    save_preferences()
+                    return
+
                 preferences = {
                     int(chat_id): {
                         int(user_id): prefs 
@@ -139,6 +146,26 @@ async def toggle_description(update: Update, _context) -> None:
     status = "enabled" if user_prefs['show_description'] else "disabled"
     await update.message.reply_text(f"Video descriptions are now {status} for your downloads in this chat.")
     logger.info("User %s in chat %s set description preference to %s", user_id, chat_id, status)
+
+async def toggle_errors(update: Update, _context) -> None:
+    """Toggle showing errors if missing permissions to delete original message."""
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+
+    # Error preferences are not per-user
+    user_prefs = get_user_prefs(chat_id, 0)
+
+    # Toggle the preference
+    current_preference = user_prefs.get('show_errors', True)
+    user_prefs['show_errors'] = not current_preference
+
+    # Save preferences to persistent storage
+    save_preferences()
+
+    # Confirm to the user
+    status = "enabled" if user_prefs['show_errors'] else "disabled"
+    await update.message.reply_text(f"Error display in this chat is now {status}")
+    logger.info("User %s in chat %s set error preference to %s", user_id, chat_id, status)
 
 async def set_topic_channel(update: Update, _context) -> None:
     """Set current topic/channel as target for video downloads."""
@@ -263,11 +290,15 @@ async def download(update: Update, context) -> None:
         user_id = update.effective_user.id
         chat_id = update.effective_chat.id
         
+        # Get chat preferences
+        chat_prefs = get_user_prefs(chat_id, 0)
         # Get user preferences for this specific chat
         user_prefs = get_user_prefs(chat_id, user_id)
         
         # Check if the user wants descriptions in this chat
         show_description = user_prefs.get('show_description', False)
+        # Allow chat-level overrides for showing deletion errors
+        show_errors = chat_prefs.get('show_errors', True)
         
         # Check if the user has a designated target chat/topic for this chat
         target_chat_id = user_prefs.get('target_chat_id', None)
@@ -325,11 +356,19 @@ async def download(update: Update, context) -> None:
                     os.remove(file_path)
                     success_count += 1
                     await update.message.set_reaction(reaction=ReactionTypeEmoji("⚡"))
-                    await update.effective_message.delete()
                 except Exception as e:
                     failure_count += 1
                     logger.error("Error sending video for URL %s: %s", url, str(e))
                     await update.message.reply_text(f"❌ Failed to send video: {url}\nError: {str(e)[:100]}...")
+
+                try:
+                    await update.effective_message.delete()
+                except Exception as e:
+                    logger.error("Error deleting original message for video URL %s: %s", url, str(e))
+                    if show_errors:
+                        failure_count += 1
+                        await update.message.reply_text(f"❌ Error deleting original message: {url}\nError: {str(e)[:100]}...")
+
             else:
                 failure_count += 1
                 # More specific error message - send to the original chat not the target
@@ -515,6 +554,7 @@ def main():
 
     # Add handlers for preferences (as commands now)
     app.add_handler(CommandHandler("toggledesc", toggle_description))
+    app.add_handler(CommandHandler("toggle_errors", toggle_errors))
     app.add_handler(CommandHandler("settopic", set_topic_channel))
     app.add_handler(CommandHandler("cleartopic", clear_topic_channel))
 

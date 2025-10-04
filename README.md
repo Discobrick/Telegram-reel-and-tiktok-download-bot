@@ -14,7 +14,10 @@ A Telegram bot that automatically downloads and shares videos from multiple soci
 ## Setup
 
 1. Clone repo
-2. Set up your bot API key in environment variables
+2. Set up your bot API key in environment variable:
+```
+    echo "BOT_API_KEY=123:abc" > .env
+```
 3. Run the command below
 4. Done
 

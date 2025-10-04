@@ -2,9 +2,15 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y ffmpeg && \
+    rm -rf /var/lib/apt/lists/* && \
+    pip3 install requests python-telegram-bot==21.9 -U --pre "yt-dlp[default]"
+
 # Create data directory and log files with proper permissions
 RUN mkdir -p /data && \
-    touch /data/preferences.json && \
+    echo '{}' > /data/preferences.json && \
     touch /data/error.log && \
     touch /data/failed_links.log && \
     chown -R 1200:1200 /app && \
@@ -19,12 +25,6 @@ RUN mkdir -p /data && \
 
 COPY bot.py .
 COPY scraper.py .
-
-# Install dependencies
-RUN apt-get update && \
-    apt-get install -y ffmpeg && \
-    rm -rf /var/lib/apt/lists/* && \
-    pip3 install requests python-telegram-bot==21.9 -U --pre "yt-dlp[default]"
 
 ENTRYPOINT ["python3"]
 
