@@ -68,9 +68,16 @@ def load_preferences():
     try:
         if os.path.exists(PREFERENCES_FILE):
             with open(PREFERENCES_FILE, 'r', encoding='utf-8') as f:
-                # JSON can't use integers as keys, so they're stored as strings
-                # We need to convert them back to integers
-                string_prefs = json.load(f)
+                try:
+                    # JSON can't use integers as keys, so they're stored as strings
+                    # We need to convert them back to integers
+                    string_prefs = json.load(f)
+                except json.JSONDecodeError:
+                    logger.warning("Preferences file %s is empty or corrupted; reinitializing", PREFERENCES_FILE)
+                    preferences = {}
+                    save_preferences()
+                    return
+
                 preferences = {
                     int(chat_id): {
                         int(user_id): prefs 
