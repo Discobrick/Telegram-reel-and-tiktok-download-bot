@@ -25,15 +25,21 @@ def download_reel_dlp(download_url, get_description=False):
     # Use os.path.join for platform-independent path handling
     file_path = os.path.join(
         temp_dir,
-        f"{datetime.now().strftime('%d%m%Y%H%M%S')}{str(uuid.uuid4())[:8]}.mp4"
+        f"{str(uuid.uuid4())}.mp4"
     )
 
     ydl_opts = {
         'outtmpl': file_path,
-        'format': 'bestvideo[vcodec^=avc]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-        'format_sort': ['res', 'ext:mp4:m4a', 'vcodec:h264'],
-        'postprocessors': [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}],
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0'
+        'final_ext': 'mp4',
+        'format_sort': ['vcodec:h264',
+                        'lang',
+                        'quality',
+                        'res',
+                        'fps',
+                        'hdr:12',
+                        'acodec:aac'],
+        'merge_output_format': 'mp4',
+        'postprocessors': [{'key': 'FFmpegVideoRemuxer', 'preferedformat': 'mp4'}]
     }
 
     video_info = download_with_dlp(download_url, ydl_opts, get_description)
