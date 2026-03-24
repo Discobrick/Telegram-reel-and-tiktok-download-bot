@@ -167,6 +167,18 @@ async def toggle_errors(update: Update, _context) -> None:
     await update.message.reply_text(f"Error display in this chat is now {status}")
     logger.info("User %s in chat %s set error preference to %s", user_id, chat_id, status)
 
+async def toggle_silent(update: Update, _context) -> None:
+    """Toggle silent failure mode — suppresses all error reactions and messages."""
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+    chat_prefs = get_user_prefs(chat_id, 0)
+    current = chat_prefs.get('silent_failures', False)
+    chat_prefs['silent_failures'] = not current
+    save_preferences()
+    status = "enabled" if chat_prefs['silent_failures'] else "disabled"
+    await update.message.reply_text(f"Silent failure mode is now {status} for this chat.")
+    logger.info("User %s in chat %s set silent_failures to %s", user_id, chat_id, status)
+
 async def set_topic_channel(update: Update, _context) -> None:
     """Set current topic/channel as target for video downloads."""
     user_id = update.effective_user.id
@@ -208,13 +220,27 @@ async def clear_topic_channel(update: Update, _context) -> None:
     await update.message.reply_text("❌ Target topic/chat has been cleared. Videos will now be sent to the chat where links are shared.")
     logger.info("User %s in chat %s cleared target chat/topic setting", user_id, chat_id)
 
+def is_facebook_marketplace_url(url):
+    """Check if a Facebook share URL resolves to a Marketplace listing."""
+    if "facebook.com/share" not in url and "fb.watch" not in url:
+        return False
+    try:
+        response = requests.head(url, allow_redirects=True, timeout=5)
+        return "/marketplace/" in response.url
+    except Exception:
+        return False
+
 def process_single_url(url, update, context, show_description, target_chat_id, target_topic_id):
     """Process a single URL for download and sending to the user.
-    
+
     This function runs in a separate thread for each URL and returns the result.
     """
     try:
         logger.info("Processing URL: %s", url)
+
+        if is_facebook_marketplace_url(url):
+            logger.info("Skipping Facebook Marketplace URL: %s", url)
+            return None, None, url, None, None, None
         
         if show_description:
             # With descriptions enabled, include video info
@@ -299,6 +325,7 @@ async def download(update: Update, context) -> None:
         show_description = user_prefs.get('show_description', False)
         # Allow chat-level overrides for showing deletion errors
         show_errors = chat_prefs.get('show_errors', True)
+        silent_failures = chat_prefs.get('silent_failures', False)
         
         # Check if the user has a designated target chat/topic for this chat
         target_chat_id = user_prefs.get('target_chat_id', None)
@@ -326,7 +353,9 @@ async def download(update: Update, context) -> None:
         
         # Process results
         for success, error_msg, url, file_path, caption, text_chunks in results:
-            if success:
+            if success is None:
+                continue  # silently skip (e.g. Facebook Marketplace links)
+            elif success:
                 # Send the video with the caption
                 try:
                     with open(file_path, 'rb') as video_file:
@@ -371,19 +400,22 @@ async def download(update: Update, context) -> None:
 
             else:
                 failure_count += 1
-                # More specific error message - send to the original chat not the target
-                if "unsupported URL" in error_msg.lower():
-                    logger.error(f"❌ Unsupported URL format: {url}")
-                    logger.error(traceback.format_exc())
-                    await update.message.set_reaction(reaction=ReactionTypeEmoji("🖕"))
-                elif "copyright" in error_msg.lower():
-                    logger.error(f"❌ Content unavailable due to copyright: {url}")
-                    logger.error(traceback.format_exc())
-                    await update.message.set_reaction(reaction=ReactionTypeEmoji("🖕"))
+                if silent_failures:
+                    logger.error("Silent failure for URL %s: %s", url, error_msg[:100])
                 else:
-                    logger.error(f"❌ Failed to process URL: {url}\nError: {error_msg[:100]}...")
-                    logger.error(traceback.format_exc())
-                    await update.message.set_reaction(reaction=ReactionTypeEmoji("🖕"))
+                    # More specific error message - send to the original chat not the target
+                    if "unsupported URL" in error_msg.lower():
+                        logger.error(f"❌ Unsupported URL format: {url}")
+                        logger.error(traceback.format_exc())
+                        await update.message.set_reaction(reaction=ReactionTypeEmoji("🖕"))
+                    elif "copyright" in error_msg.lower():
+                        logger.error(f"❌ Content unavailable due to copyright: {url}")
+                        logger.error(traceback.format_exc())
+                        await update.message.set_reaction(reaction=ReactionTypeEmoji("🖕"))
+                    else:
+                        logger.error(f"❌ Failed to process URL: {url}\nError: {error_msg[:100]}...")
+                        logger.error(traceback.format_exc())
+                        await update.message.set_reaction(reaction=ReactionTypeEmoji("🖕"))
 
     except Exception as e:
         await update.message.set_reaction(reaction=ReactionTypeEmoji("👎"))
@@ -455,6 +487,7 @@ async def help_command(update: Update, _context) -> None:
         "/help - Show this help message\n"
         "/report - Generate a report of failed downloads\n"
         "/toggledesc - Toggle video descriptions on/off\n"
+        "/togglesilent - Toggle silent failure mode (no error reactions/messages)\n"
         "/settopic - Set current chat/topic as target for downloads\n"
         "/cleartopic - Clear target chat/topic setting\n\n"
         "📱 *Supported Platforms*:\n"
@@ -555,6 +588,7 @@ def main():
     # Add handlers for preferences (as commands now)
     app.add_handler(CommandHandler("toggledesc", toggle_description))
     app.add_handler(CommandHandler("toggle_errors", toggle_errors))
+    app.add_handler(CommandHandler("togglesilent", toggle_silent))
     app.add_handler(CommandHandler("settopic", set_topic_channel))
     app.add_handler(CommandHandler("cleartopic", clear_topic_channel))
 

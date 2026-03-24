@@ -56,12 +56,27 @@ This will show detailed information about the video including:
 - View count
 - Video description (truncated if too long)
 
+### Silent Failure Mode
+
+Toggle whether the bot gives any feedback when a download fails:
+
+```
+/togglesilent
+```
+
+When enabled, failed downloads produce no reaction or error message — the bot stays completely silent. Errors are still logged internally. Useful for busy chats where failure noise is unwanted.
+
+### Facebook Marketplace
+
+Links that resolve to Facebook Marketplace listings are automatically detected and silently ignored. No error reaction is shown.
+
 ### Commands
 
 - `/start` - Start the bot and see welcome message
 - `/help` - Show help information and list of supported platforms
 - `/report` - Generate a report of failed downloads
 - `/toggledesc` - Toggle video descriptions on/off
+- `/togglesilent` - Toggle silent failure mode (no error reactions/messages)
 - `/settopic` - Set current chat/topic as target for downloads
 - `/cleartopic` - Clear target chat/topic setting
 
