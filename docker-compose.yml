@@ -16,6 +16,14 @@ services:
       - org.opencontainers.image.ref.name=botty_mcbotface
       - org.opencontainers.image.version=latest
     runtime: runc
+    # Cap the container: MAX_WORKERS concurrent yt-dlp downloads plus ffmpeg
+    # remuxes can spike, and an OOM here should not take the host with it
+    mem_limit: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - PREFERENCES_FILE=/data/preferences.json
       - ERROR_LOG_FILE=/data/error.log

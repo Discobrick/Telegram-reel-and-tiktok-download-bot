@@ -6,12 +6,15 @@ like 9GAG, Twitter/X, Instagram Reels, TikTok, Facebook Reels, and YouTube Short
 """
 import json
 import logging as log
+from logging.handlers import RotatingFileHandler
 import os
 import re
 import traceback
 import asyncio
 import concurrent.futures
+import requests
 from telegram import Update
+from telegram import BotCommand
 from telegram import ReactionTypeEmoji
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CommandHandler
 
@@ -46,7 +49,8 @@ log.basicConfig(
     level=log.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        log.FileHandler(ERROR_LOG_FILE),
+        # Rotate: nothing ever truncates this file, and it lives on the data volume
+        RotatingFileHandler(ERROR_LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3),
         log.StreamHandler()
     ]
 )
@@ -61,6 +65,9 @@ preferences = {}
 # We'll limit the number of concurrent downloads to avoid overwhelming the system
 MAX_WORKERS = os.environ.get('MAX_WORKERS', 5)
 thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=int(MAX_WORKERS))
+
+# Telegram's bot API refuses uploads larger than 50 MB
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 def load_preferences():
     """Load preferences from file if it exists."""
@@ -111,9 +118,13 @@ def save_preferences():
             for chat_id, chat_prefs in preferences.items()
         }
         
-        with open(PREFERENCES_FILE, 'w', encoding='utf-8') as f:
+        # Write to a temp file then rename, so a crash mid-write can't corrupt
+        # the real file (a corrupt file wipes everyone's preferences on load)
+        tmp_file = PREFERENCES_FILE + '.tmp'
+        with open(tmp_file, 'w', encoding='utf-8') as f:
             json.dump(string_prefs, f, indent=2)
-        
+        os.replace(tmp_file, PREFERENCES_FILE)
+
         logger.info("Preferences saved to %s", PREFERENCES_FILE)
     except Exception as e:
         logger.error("Failed to save preferences: %s", str(e))
@@ -245,7 +256,8 @@ def is_facebook_marketplace_url(url):
     try:
         response = requests.head(url, allow_redirects=True, timeout=5)
         return "/marketplace/" in response.url
-    except Exception:
+    except requests.RequestException as e:
+        logger.warning("Could not resolve %s to check for Marketplace: %s", url, str(e))
         return False
 
 def process_single_url(url, update, context, show_description, show_link, target_chat_id, target_topic_id):
@@ -263,14 +275,20 @@ def process_single_url(url, update, context, show_description, show_link, target
         if show_description:
             # With descriptions enabled, include video info
             file_path, video_info = download_reel(url, get_description=True)
-            full_caption = format_video_caption(update, video_info)
+            full_caption = format_video_caption(update, video_info, url if show_link else None)
         else:
             # Without descriptions, just download the video
             file_path = download_reel(url)
             full_caption = from_user(update)
+            if show_link:
+                full_caption += f"\n🔗 {url}"
 
-        if show_link:
-            full_caption += f"\n\n🔗 {url}"
+        size = os.path.getsize(file_path)
+        if size > MAX_UPLOAD_BYTES:
+            os.remove(file_path)
+            raise ValueError(
+                f"Video is {size // (1024 * 1024)} MB, over Telegram's 50 MB upload limit"
+            )
 
         # Check if caption exceeds Telegram's limit
         if len(full_caption) > 1024:
@@ -323,14 +341,21 @@ async def download_url_in_thread(url, update, context, show_description, show_li
         )
     except Exception as e:
         logger.error("Error in download thread for URL %s: %s", url, str(e))
-        return False, str(e), url
+        # Must match the 6-tuple shape the caller unpacks
+        return False, str(e), url, None, None, None
 
 async def download(update: Update, context) -> None:
     """Gets video URLs from a telegram message, downloads the videos, and sends messages with them."""
     try:
         await update.message.set_reaction(reaction=ReactionTypeEmoji("👀"))
-        urls = re.findall(r"(https?://\S+)", update.message.text)
-        
+
+        # Forwarded media carries its text in .caption, not .text
+        message_text = update.message.text or update.message.caption or ""
+        # dict.fromkeys de-duplicates while keeping the original order
+        urls = list(dict.fromkeys(re.findall(r"(https?://\S+)", message_text)))
+        if not urls:
+            return
+
         user_id = update.effective_user.id
         chat_id = update.effective_chat.id
         
@@ -358,7 +383,8 @@ async def download(update: Update, context) -> None:
         
         success_count = 0
         failure_count = 0
-        
+        skipped_count = 0
+
         # Use asyncio.gather with run_in_executor to run downloads in parallel
         tasks = []
         for url in urls:
@@ -374,6 +400,7 @@ async def download(update: Update, context) -> None:
         # Process results
         for success, error_msg, url, file_path, caption, text_chunks in results:
             if success is None:
+                skipped_count += 1
                 continue  # silently skip (e.g. Facebook Marketplace links)
             elif success:
                 # Send the video with the caption
@@ -390,7 +417,7 @@ async def download(update: Update, context) -> None:
                             connect_timeout=600,
                             pool_timeout=600,
                         )
-                    
+
                     # Send additional messages with the rest of the caption if needed
                     for chunk in text_chunks:
                         await context.bot.send_message(
@@ -400,23 +427,19 @@ async def download(update: Update, context) -> None:
                             disable_notification=True,
                             reply_to_message_id=sent_message.message_id
                         )
-                    
-                    # Clean up the file
-                    os.remove(file_path)
+
                     success_count += 1
-                    await update.message.set_reaction(reaction=ReactionTypeEmoji("⚡"))
                 except Exception as e:
                     failure_count += 1
                     logger.error("Error sending video for URL %s: %s", url, str(e))
-                    await update.message.reply_text(f"❌ Failed to send video: {url}\nError: {str(e)[:100]}...")
-
-                try:
-                    await update.effective_message.delete()
-                except Exception as e:
-                    logger.error("Error deleting original message for video URL %s: %s", url, str(e))
-                    if show_errors:
-                        failure_count += 1
-                        await update.message.reply_text(f"❌ Error deleting original message: {url}\nError: {str(e)[:100]}...")
+                    if not silent_failures:
+                        await update.message.reply_text(f"❌ Failed to send video: {url}\nError: {str(e)[:100]}...")
+                finally:
+                    # Always clean up, otherwise failed sends pile up in temp/
+                    try:
+                        os.remove(file_path)
+                    except OSError as e:
+                        logger.warning("Could not remove temp file %s: %s", file_path, str(e))
 
             else:
                 failure_count += 1
@@ -426,16 +449,28 @@ async def download(update: Update, context) -> None:
                     # More specific error message - send to the original chat not the target
                     if "unsupported URL" in error_msg.lower():
                         logger.error(f"❌ Unsupported URL format: {url}")
-                        logger.error(traceback.format_exc())
-                        await update.message.set_reaction(reaction=ReactionTypeEmoji("🖕"))
                     elif "copyright" in error_msg.lower():
                         logger.error(f"❌ Content unavailable due to copyright: {url}")
-                        logger.error(traceback.format_exc())
-                        await update.message.set_reaction(reaction=ReactionTypeEmoji("🖕"))
                     else:
                         logger.error(f"❌ Failed to process URL: {url}\nError: {error_msg[:100]}...")
-                        logger.error(traceback.format_exc())
-                        await update.message.set_reaction(reaction=ReactionTypeEmoji("🖕"))
+                    logger.error(traceback.format_exc())
+
+        # One reaction for the whole message, so mixed results don't fight over it
+        if not silent_failures:
+            if failure_count:
+                await update.message.set_reaction(reaction=ReactionTypeEmoji("🖕"))
+            elif success_count:
+                await update.message.set_reaction(reaction=ReactionTypeEmoji("⚡"))
+
+        # Only delete the original once, and only if nothing failed — otherwise
+        # we'd destroy the links the user still needs to retry
+        if success_count and not failure_count and not skipped_count:
+            try:
+                await update.effective_message.delete()
+            except Exception as e:
+                logger.error("Error deleting original message: %s", str(e))
+                if show_errors and not silent_failures:
+                    await update.message.reply_text(f"❌ Error deleting original message.\nError: {str(e)[:100]}...")
 
     except Exception as e:
         await update.message.set_reaction(reaction=ReactionTypeEmoji("👎"))
@@ -445,16 +480,24 @@ async def download(update: Update, context) -> None:
         # Ensure directory for failed links log exists
         os.makedirs(os.path.dirname(FAILED_LINKS_LOG_FILE), exist_ok=True)
         with open(FAILED_LINKS_LOG_FILE, 'a', encoding='utf-8') as f:
-            f.write(f"{update.message.text} - General error: {str(e)}\n")
+            f.write(f"{update.message.text or update.message.caption} - General error: {str(e)}\n")
 
-def format_video_caption(update, video_info):
+def format_video_caption(update, video_info, url=None):
     """Format video information into a caption."""
     # Start with the user info
-    caption = from_user(update) + "\n\n"
-    
-    # Add video information
-    caption += f"📹 *{video_info.get('title', 'No title')}*\n"
-    
+    caption = from_user(update) + "\n"
+
+    # The link goes near the top so a long description can't push it past the
+    # 1024 char caption limit and into a follow-up message
+    if url:
+        caption += f"🔗 {url}\n"
+
+    caption += "\n"
+
+    # Add video information. No markdown markers: descriptions are scraped and
+    # would need escaping, and the send calls don't set parse_mode anyway
+    caption += f"📹 {video_info.get('title', 'No title')}\n"
+
     # Add uploader if available
     if video_info.get('uploader') and video_info.get('uploader') != 'Unknown uploader':
         caption += f"👤 {video_info.get('uploader')}\n"
@@ -509,6 +552,7 @@ async def help_command(update: Update, _context) -> None:
         "/toggledesc - Toggle video descriptions on/off\n"
         "/togglelink - Toggle including the original link on/off\n"
         "/togglesilent - Toggle silent failure mode (no error reactions/messages)\n"
+        "/toggleerrors - Toggle message-deletion error reports on/off\n"
         "/settopic - Set current chat/topic as target for downloads\n"
         "/cleartopic - Clear target chat/topic setting\n\n"
         "📱 *Supported Platforms*:\n"
@@ -578,13 +622,27 @@ async def create_failed_link_report(update: Update, _context) -> None:
         logger.error("Error generating report: %s", str(e))
         await update.message.reply_text(f"Error generating report: {str(e)}")
 
+async def register_commands(app) -> None:
+    """Publish the command list so Telegram offers autocomplete."""
+    await app.bot.set_my_commands([
+        BotCommand("start", "Start the bot"),
+        BotCommand("help", "Show the help message"),
+        BotCommand("report", "Generate a report of failed downloads"),
+        BotCommand("toggledesc", "Toggle video descriptions on/off"),
+        BotCommand("togglelink", "Toggle including the original link on/off"),
+        BotCommand("togglesilent", "Toggle silent failure mode"),
+        BotCommand("toggleerrors", "Toggle message-deletion error reports"),
+        BotCommand("settopic", "Set this chat/topic as download target"),
+        BotCommand("cleartopic", "Clear the target chat/topic"),
+    ])
+
 def main():
     """Start the bot."""
     # Load preferences from persistent storage
     load_preferences()
 
     # Create the Application and pass the bot's token
-    app = ApplicationBuilder().token(os.environ.get("BOT_API_KEY")).build()
+    app = ApplicationBuilder().token(os.environ.get("BOT_API_KEY")).post_init(register_commands).build()
 
     # Define regex patterns for each platform
     url_patterns = {
@@ -609,6 +667,8 @@ def main():
     # Add handlers for preferences (as commands now)
     app.add_handler(CommandHandler("toggledesc", toggle_description))
     app.add_handler(CommandHandler("togglelink", toggle_link))
+    app.add_handler(CommandHandler("toggleerrors", toggle_errors))
+    # Kept for anyone with the old name in muscle memory
     app.add_handler(CommandHandler("toggle_errors", toggle_errors))
     app.add_handler(CommandHandler("togglesilent", toggle_silent))
     app.add_handler(CommandHandler("settopic", set_topic_channel))

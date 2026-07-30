@@ -9,3 +9,11 @@ ENV
 .git
 .gitignore
 .DS_Store
+.claude
+
+# Secrets and runtime data (data/ holds real Telegram user and chat IDs)
+.env
+data
+temp
+logs
+*.log

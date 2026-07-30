@@ -7,10 +7,13 @@ RUN apt-get update && \
     apt-get install -y ffmpeg npm && \
     npm install -g deno && \
     rm -rf /var/lib/apt/lists/* && \
-    pip3 install requests python-telegram-bot==21.9 -U --pre "yt-dlp[default,curl-cffi]"
+    pip3 install --no-cache-dir requests python-telegram-bot==21.9 -U --pre "yt-dlp[default,curl-cffi]"
+
+# Entrypoint upgrades yt-dlp into here on start; /data is the persistent volume
+ENV PYTHONUSERBASE=/data/pip
 
 # Create data directory and log files with proper permissions
-RUN mkdir -p /data && \
+RUN mkdir -p /data/pip && \
     echo '{}' > /data/preferences.json && \
     touch /data/error.log && \
     touch /data/failed_links.log && \
@@ -26,7 +29,6 @@ RUN mkdir -p /data && \
 
 COPY bot.py .
 COPY scraper.py .
+COPY --chmod=755 entrypoint.sh .
 
-ENTRYPOINT ["python3"]
-
-CMD ["-u", "bot.py"]
+ENTRYPOINT ["./entrypoint.sh"]
