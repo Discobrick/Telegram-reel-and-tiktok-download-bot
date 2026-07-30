@@ -147,6 +147,24 @@ async def toggle_description(update: Update, _context) -> None:
     await update.message.reply_text(f"Video descriptions are now {status} for your downloads in this chat.")
     logger.info("User %s in chat %s set description preference to %s", user_id, chat_id, status)
 
+async def toggle_link(update: Update, _context) -> None:
+    """Toggle including the original link with videos."""
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+
+    user_prefs = get_user_prefs(chat_id, user_id)
+
+    # Toggle the preference
+    user_prefs['show_link'] = not user_prefs.get('show_link', False)
+
+    # Save preferences to persistent storage
+    save_preferences()
+
+    # Confirm to the user
+    status = "enabled" if user_prefs['show_link'] else "disabled"
+    await update.message.reply_text(f"Original links are now {status} for your downloads in this chat.")
+    logger.info("User %s in chat %s set link preference to %s", user_id, chat_id, status)
+
 async def toggle_errors(update: Update, _context) -> None:
     """Toggle showing errors if missing permissions to delete original message."""
     user_id = update.effective_user.id
@@ -230,7 +248,7 @@ def is_facebook_marketplace_url(url):
     except Exception:
         return False
 
-def process_single_url(url, update, context, show_description, target_chat_id, target_topic_id):
+def process_single_url(url, update, context, show_description, show_link, target_chat_id, target_topic_id):
     """Process a single URL for download and sending to the user.
 
     This function runs in a separate thread for each URL and returns the result.
@@ -241,40 +259,40 @@ def process_single_url(url, update, context, show_description, target_chat_id, t
         if is_facebook_marketplace_url(url):
             logger.info("Skipping Facebook Marketplace URL: %s", url)
             return None, None, url, None, None, None
-        
+
         if show_description:
             # With descriptions enabled, include video info
             file_path, video_info = download_reel(url, get_description=True)
-            
-            # Create a caption with video information
             full_caption = format_video_caption(update, video_info)
-            
-            # Check if caption exceeds Telegram's limit
-            if len(full_caption) > 1024:
-                # For the video, use a truncated caption
-                caption = full_caption[:1021] + "..."
-                
-                # Prepare additional messages for the rest of the caption
-                remaining_text = full_caption[1021:]
-                
-                # Split remaining text into chunks of 1024 characters (Telegram message limit)
-                text_chunks = []
-                while remaining_text:
-                    if len(remaining_text) <= 1024:
-                        text_chunks.append(remaining_text)
-                        remaining_text = ""
-                    else:
-                        text_chunks.append(remaining_text[:1021] + "...")
-                        remaining_text = remaining_text[1021:]
-            else:
-                caption = full_caption
-                text_chunks = []
         else:
             # Without descriptions, just download the video
             file_path = download_reel(url)
-            caption = from_user(update)
+            full_caption = from_user(update)
+
+        if show_link:
+            full_caption += f"\n\n🔗 {url}"
+
+        # Check if caption exceeds Telegram's limit
+        if len(full_caption) > 1024:
+            # For the video, use a truncated caption
+            caption = full_caption[:1021] + "..."
+
+            # Prepare additional messages for the rest of the caption
+            remaining_text = full_caption[1021:]
+
+            # Split remaining text into chunks of 1024 characters (Telegram message limit)
             text_chunks = []
-        
+            while remaining_text:
+                if len(remaining_text) <= 1024:
+                    text_chunks.append(remaining_text)
+                    remaining_text = ""
+                else:
+                    text_chunks.append(remaining_text[:1021] + "...")
+                    remaining_text = remaining_text[1021:]
+        else:
+            caption = full_caption
+            text_chunks = []
+
         return True, None, url, file_path, caption, text_chunks
     except Exception as e:
         error_msg = str(e)
@@ -287,7 +305,7 @@ def process_single_url(url, update, context, show_description, target_chat_id, t
             
         return False, error_msg, url, None, None, None
 
-async def download_url_in_thread(url, update, context, show_description, target_chat_id, target_topic_id):
+async def download_url_in_thread(url, update, context, show_description, show_link, target_chat_id, target_topic_id):
     """Run the URL download process in a separate thread.
     
     This function wraps process_single_url to be run in a thread pool executor,
@@ -301,7 +319,7 @@ async def download_url_in_thread(url, update, context, show_description, target_
         # Use run_in_executor to run the CPU-bound download operation in a separate thread
         return await asyncio.get_event_loop().run_in_executor(
             thread_pool,
-            lambda: process_single_url(url, update, context, show_description, target_chat_id, target_topic_id)
+            lambda: process_single_url(url, update, context, show_description, show_link, target_chat_id, target_topic_id)
         )
     except Exception as e:
         logger.error("Error in download thread for URL %s: %s", url, str(e))
@@ -323,6 +341,8 @@ async def download(update: Update, context) -> None:
         
         # Check if the user wants descriptions in this chat
         show_description = user_prefs.get('show_description', False)
+        # Check if the user wants the original link included in this chat
+        show_link = user_prefs.get('show_link', False)
         # Allow chat-level overrides for showing deletion errors
         show_errors = chat_prefs.get('show_errors', True)
         silent_failures = chat_prefs.get('silent_failures', False)
@@ -344,7 +364,7 @@ async def download(update: Update, context) -> None:
         for url in urls:
             # Create a task for each URL to download and process
             task = asyncio.create_task(
-                download_url_in_thread(url, update, context, show_description, target_chat_id, target_topic_id)
+                download_url_in_thread(url, update, context, show_description, show_link, target_chat_id, target_topic_id)
             )
             tasks.append(task)
         
@@ -487,6 +507,7 @@ async def help_command(update: Update, _context) -> None:
         "/help - Show this help message\n"
         "/report - Generate a report of failed downloads\n"
         "/toggledesc - Toggle video descriptions on/off\n"
+        "/togglelink - Toggle including the original link on/off\n"
         "/togglesilent - Toggle silent failure mode (no error reactions/messages)\n"
         "/settopic - Set current chat/topic as target for downloads\n"
         "/cleartopic - Clear target chat/topic setting\n\n"
@@ -587,6 +608,7 @@ def main():
 
     # Add handlers for preferences (as commands now)
     app.add_handler(CommandHandler("toggledesc", toggle_description))
+    app.add_handler(CommandHandler("togglelink", toggle_link))
     app.add_handler(CommandHandler("toggle_errors", toggle_errors))
     app.add_handler(CommandHandler("togglesilent", toggle_silent))
     app.add_handler(CommandHandler("settopic", set_topic_channel))

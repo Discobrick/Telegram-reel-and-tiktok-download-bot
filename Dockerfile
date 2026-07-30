@@ -7,7 +7,7 @@ RUN apt-get update && \
     apt-get install -y ffmpeg npm && \
     npm install -g deno && \
     rm -rf /var/lib/apt/lists/* && \
-    pip3 install requests python-telegram-bot==21.9 -U --pre "yt-dlp[default]"
+    pip3 install requests python-telegram-bot==21.9 -U --pre "yt-dlp[default,curl-cffi]"
 
 # Create data directory and log files with proper permissions
 RUN mkdir -p /data && \
