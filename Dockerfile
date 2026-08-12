@@ -7,7 +7,7 @@ RUN apt-get update && \
     apt-get install -y ffmpeg npm && \
     npm install -g deno && \
     rm -rf /var/lib/apt/lists/* && \
-    pip3 install --no-cache-dir requests python-telegram-bot==21.9 -U --pre "yt-dlp[default,curl-cffi]"
+    pip3 install --no-cache-dir requests python-telegram-bot==21.9 -U --pre "yt-dlp[default]"
 
 # Entrypoint upgrades yt-dlp into here on start; /data is the persistent volume
 ENV PYTHONUSERBASE=/data/pip

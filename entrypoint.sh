@@ -10,7 +10,13 @@ if [ "${YTDLP_AUTO_UPDATE:-1}" = "1" ]; then
     # seeds a volume when it is empty, so create it here too
     mkdir -p "${PYTHONUSERBASE:-/data/pip}"
     echo "Updating yt-dlp..."
-    if ! pip3 install --quiet --user --upgrade --pre "yt-dlp[default,curl-cffi]"; then
+    # Dropping the extra does not remove an already-installed curl_cffi from the volume
+    pip3 uninstall --quiet --yes curl_cffi >/dev/null 2>&1 || true
+    # No curl-cffi: yt-dlp caps that extra at <0.16, and TikTok rejects the TLS
+    # fingerprints those versions send. yt-dlp impersonates whenever curl_cffi is
+    # importable, so the only way off that path is to not install it.
+    # ponytail: revisit once yt-dlp allows curl-cffi >=0.16
+    if ! pip3 install --quiet --user --upgrade --pre "yt-dlp[default]"; then
         echo "yt-dlp update failed, continuing with the version baked into the image"
     fi
 fi
